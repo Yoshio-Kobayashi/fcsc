@@ -1,0 +1,5 @@
+<launch>
+    <node pkg="analysis_workspace" type="analyse_workspace" name="analyse_workspace" output="screen">
+        
+    </node>
+</launch>
