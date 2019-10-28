@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="ar_marker_model">
+  <xacro:arg name="marker_id" default="0"/>
+  <xacro:macro name="ar_marker_xacro">
+      <link name="ar_marker">
+        <inertial>
+          <origin xyz="0 0 0"/>
+          <mass value="0.001" />
+          <inertia  ixx="1e-6" ixy = "0" ixz = "0"
+                    iyy="1e-6" iyz = "0"
+                    izz="1e-6" />
+        </inertial>
+        <!-- <collision>
+          <origin xyz="0 0 0"/>
+          <geometry>
+            <box size="0.7 0.7 0.01"/>
+          </geometry>
+        </collision> -->
+        <visual>
+          <origin xyz="0 0 0"/>
+          <geometry>
+            <box size="0.7 0.7 0.01"/>
+          </geometry>
+        </visual>
+      </link>
+      <gazebo reference="ar_marker">
+        <material>ar_marker_$(arg marker_id)</material>
+      </gazebo>
+      <link name="world"/>
+      <joint name="world_fix" type="fixed">
+        <parent link="world"/>
+        <child link="ar_marker"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </joint>
+  </xacro:macro>
+  <xacro:ar_marker_xacro/>
+</robot>

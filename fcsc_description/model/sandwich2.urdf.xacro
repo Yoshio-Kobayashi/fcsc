@@ -1,0 +1,145 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="sandwich">
+
+  <!-- label -->
+  <xacro:arg name="use_label" default="false"/>
+  <xacro:arg name="label_id" default="A"/>
+
+  <!-- ar marker -->
+  <xacro:arg name="use_ar_marker" default="true"/>
+  <xacro:arg name="marker_id" default="0" />
+  <xacro:arg name="marker_size" default="3"/>
+
+  <property name="marker_size_p" value="${$(arg marker_size) * 0.01}"/>
+  <property name="marker_id_p" value="$(arg marker_id)"/>
+
+  <property name="M_PI" value="3.14159265359"/>
+
+  <property name="mesh_path" value="package://fcsc_description/mesh/dae/sandwich_mix.dae"/>
+  <!-- <property name="mesh_path" value="package://fcsc_description/mesh/dae/sandwich_egg.dae"/> -->
+
+  <xacro:macro name="box_inertial" params="mass x y z *origin">
+    <inertial>
+      <mass value="${mass}" />
+      <xacro:insert_block name="origin" />
+      <inertia  ixx="${mass*(y*y+z*z)/12}" ixy = "0" ixz = "0"
+                iyy="${mass*(x*x+z*z)/12}" iyz = "0"
+                izz="${mass*(x*x+y*y)/12}" />
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="ar_marker" params="ar_marker_id ar_marker_size parent *origin">
+		<link name="ar_marker_${ar_marker_id}">
+			<xacro:box_inertial mass="0.0000001" x="${ar_marker_size}" y="${ar_marker_size}" z="0.0001">
+				<origin xyz="0 0 0" rpy="0 0 1.57" />
+			</xacro:box_inertial>
+			<collision>
+				<origin xyz="0 0 0" rpy="0 0 1.57"/>
+				<geometry>
+					<box size="${ar_marker_size} ${ar_marker_size} 0.0001"/>
+				</geometry>
+			</collision>
+			<visual>
+				<origin xyz="0 0 0" rpy="0 0 1.57"/>
+				<geometry>
+					<box size="${ar_marker_size} ${ar_marker_size} 0.0001"/>
+				</geometry>
+				<material name="ar_marker_${ar_marker_id}">
+					<texture filename="package://fcsc_description/media/materials/textures/MarkerData_${ar_marker_id}.png"/>
+				</material>
+			</visual>
+		</link>
+		<gazebo reference="ar_marker_${ar_marker_id}">
+			<material>ar_marker_${ar_marker_id}</material>
+		</gazebo>
+		<joint name="ar_joint_${ar_marker_id}" type="fixed">
+			<parent link="${parent}"/>
+			<child link="ar_marker_${ar_marker_id}"/>
+			<xacro:insert_block name="origin" />
+		</joint>
+	</xacro:macro>
+
+  <xacro:macro name="sandwich">
+    <link name="sandwich">
+      <inertial>
+        <origin xyz="-0.03 0 0.046667"/>
+        <mass value="0.1"/>
+        <inertia  ixx="0.000149722222" ixy = "0.0" ixz = "-0.000035"
+                  iyy="0.000153888889" iyz = "0.0"
+                  izz="0.000085833333" />
+      </inertial>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="${mesh_path}" scale="1 1 1"/>
+        </geometry>
+      </collision>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="${mesh_path}" scale="1 1 1"/>
+        </geometry>
+      </visual>
+    </link>
+
+    <xacro:if value="$(arg use_label)">
+      <link name="label">
+        <inertial>
+          <origin xyz="0 0 0"/>
+          <mass value="0.00000001"/>
+          <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+        </inertial>
+        <collision>
+          <origin xyz="0 0 ${0*0.073/2}"/>
+          <geometry>
+            <box size="0.0001 0.06 0.073"/>
+          </geometry>
+        </collision>
+        <visual>
+          <origin xyz="0 0 ${0*0.073/2}"/>
+          <geometry>
+            <box size="0.0001 0.06 0.073"/>
+          </geometry>
+          <material name="ID_$(arg label_id)">
+            <texture filename="package://fcsc_description/image/ID_$(arg label_id).png"/>
+          </material>
+        </visual>
+      </link>
+      <gazebo reference="label">
+        <material>ID_$(arg label_id)</material>
+      </gazebo>
+      <joint name="label_joint" type="fixed">
+        <parent link="sandwich"/>
+        <child link="label"/>
+        <origin xyz="${0.07/2-0.001} 0 0.03" rpy="0 0 0"/>
+      </joint>
+    </xacro:if>
+
+    <xacro:if value="$(arg use_ar_marker)">
+      <!-- front -->
+      <xacro:ar_marker ar_marker_id="${marker_id_p}" ar_marker_size="${marker_size_p}" parent="sandwich">
+  	    <origin xyz="${-(marker_size_p / 2) * 9 / 16.6433 - 0.001} 0 ${0.14 - (marker_size_p / 2) * 14 / 16.6433}" rpy="${0.999459} 0 ${-M_PI/2}"/>
+  	  </xacro:ar_marker>
+      <!-- back -->
+      <xacro:ar_marker ar_marker_id="${marker_id_p+1}" ar_marker_size="${marker_size_p}" parent="sandwich">
+        <origin xyz="0.001 0 ${0.14-marker_size_p/2}" rpy="${M_PI/2} 0 ${M_PI/2}"/>
+      </xacro:ar_marker>
+      <!-- bottom -->
+      <xacro:ar_marker ar_marker_id="${marker_id_p+2}" ar_marker_size="${marker_size_p}" parent="sandwich">
+        <origin xyz="${-0.09+marker_size_p/2} 0 -0.001" rpy="0 ${M_PI} ${M_PI/2}"/>
+      </xacro:ar_marker>
+      <!-- right -->
+      <xacro:ar_marker ar_marker_id="${marker_id_p+3}" ar_marker_size="${marker_size_p}" parent="sandwich">
+        <origin xyz="${-marker_size_p/2} ${-0.07/2-0.001} ${marker_size_p/2}" rpy="${M_PI/2} 0 0"/>
+      </xacro:ar_marker>
+      <!-- left -->
+      <xacro:ar_marker ar_marker_id="${marker_id_p+4}" ar_marker_size="${marker_size_p}" parent="sandwich">
+        <origin xyz="${-marker_size_p/2} ${0.07/2+0.001} ${marker_size_p/2}" rpy="${M_PI/2} 0 0"/>
+      </xacro:ar_marker>
+    </xacro:if>
+
+  </xacro:macro>
+
+  <xacro:sandwich/>
+
+</robot>

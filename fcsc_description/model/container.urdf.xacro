@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="container">
+  <property name="container_mass" value="1.7" />
+  <property name="control_box_mass" value="15" />
+  <xacro:macro name="container">
+    <link name="container">
+      <inertial>
+        <origin xyz="0 0 0"/>
+        <mass value="${container_mass + control_box_mass}"/>
+        <!-- <mass value="${container_mass}"/> -->
+        <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+        <!-- <inertia ixx="0.000001" ixy="0" ixz="0" iyy="0.000001" iyz="0" izz="0.000001"/> -->
+      </inertial>
+      <collision>
+        <origin xyz="0 0 0"/>
+        <geometry>
+          <!-- <mesh filename="package://fcsc_description/mesh/modifiable_container2.stl" scale="1 1 1"/> -->
+          <!-- <mesh filename="package://fcsc_description/mesh/modifiable_container.stl" scale="1 1 1"/> -->
+          <mesh filename="package://fcsc_description/mesh/container.stl" scale="1 1 1"/>
+        </geometry>
+      </collision>
+      <visual>
+        <origin xyz="0 0 0"/>
+        <geometry>
+          <!-- <mesh filename="package://fcsc_description/mesh/modifiable_container2.stl" scale="1 1 1"/> -->
+          <!-- <mesh filename="package://fcsc_description/mesh/modifiable_container.stl" scale="1 1 1"/> -->
+          <mesh filename="package://fcsc_description/mesh/container.stl" scale="1 1 1"/>
+        </geometry>
+        <material name="container_blue">
+          <color rgba="0.3 0.815 0.815 1.0"/>
+        </material>
+      </visual>
+    </link>
+    <!-- <link name="world"/>
+    <joint name="fix" type="fixed">
+      <parent link="world"/>
+      <child link="container"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint> -->
+    <gazebo reference="container">
+      <mu1 value="100000000"/>
+      <mu2 value="100000000"/>
+      <material>Gazebo/Blue</material>
+      <turnGravityOff>false</turnGravityOff>
+      <selfCollide>false</selfCollide>
+    </gazebo>
+  </xacro:macro>
+</robot>

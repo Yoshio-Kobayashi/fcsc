@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="common">
+  <xacro:macro name="create_box" params="name mass x y z *origin visual:=true">
+    <link name="${name}">
+      <inertial>
+        <mass value="${mass}"/>
+        <xacro:insert_block name="origin" />
+        <inertia  ixx="${mass*(y*y+z*z)/12}" ixy = "0" ixz = "0"
+                  iyy="${mass*(x*x+z*z)/12}" iyz = "0"
+                  izz="${mass*(x*x+y*y)/12}" />
+      </inertial>
+      <collision>
+        <xacro:insert_block name="origin"/>
+        <geometry>
+          <box size="${x} ${y} ${z}"/>
+        </geometry>
+      </collision>
+      <xacro:if value="${visual}">
+        <visual>
+          <xacro:insert_block name="origin"/>
+          <geometry>
+            <box size="${x} ${y} ${z}"/>
+          </geometry>
+        </visual>
+      </xacro:if>
+    </link>
+  </xacro:macro>
+  <!-- example -->
+  <!-- <xacro:create_box name="control_box" mass="15" x="0.268" y="0.475" z="0.423">
+    <origin xyz="0 0 ${0.423/2}" rpy="0 0 0" />
+  </xacro:create_box> -->
+</robot>

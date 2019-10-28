@@ -1,0 +1,68 @@
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="shelf">
+	<xacro:include filename="$(find fcsc_description)/model/create_box.xacro"/>
+
+	<xacro:macro name="box_inertial" params="mass x y z *origin">
+		<inertial>
+			<mass value="${mass}" />
+			<xacro:insert_block name="origin" />
+			<inertia  ixx="${mass*(y*y+z*z)/12}" ixy = "0" ixz = "0"
+								iyy="${mass*(x*x+z*z)/12}" iyz = "0"
+								izz="${mass*(x*x+y*y)/12}" />
+		</inertial>
+	</xacro:macro>
+
+	<xacro:macro name="container" params="width depth height thickness">
+
+		<xacro:create_box name="container_base" mass="5" x="${depth}" y="${width}" z="${thickness}">
+			<origin xyz="0 0 ${thickness / 2}" rpy="0 0 0"/>
+		</xacro:create_box>
+
+		<xacro:create_box name="container_right" mass="5" x="${depth}" y="${thickness}" z="${height + thickness}">
+			<origin xyz="0 ${(width + thickness) / 2} ${(height + thickness) / 2}" rpy="0 0 0"/>
+		</xacro:create_box>
+
+		<xacro:create_box name="container_left" mass="5" x="${depth}" y="${thickness}" z="${height + thickness}">
+			<origin xyz="0 ${-(width + thickness) / 2} ${(height + thickness) / 2}" rpy="0 0 0"/>
+		</xacro:create_box>
+
+		<xacro:create_box name="container_forward" mass="5" x="${thickness}" y="${width}" z="${height + thickness}">
+			<origin xyz="${(depth + thickness) / 2} 0 ${(height + thickness) / 2}" rpy="0 0 0"/>
+		</xacro:create_box>
+
+		<xacro:create_box name="container_back" mass="5" x="${thickness}" y="${width}" z="${height + thickness}">
+			<origin xyz="${-(depth + thickness) / 2} 0 ${(height + thickness) / 2}" rpy="0 0 0"/>
+		</xacro:create_box>
+
+		<!-- <link name="world"/>
+		<joint name="world_fixed" type="fixed">
+			<parent link="world"/>
+			<child link="container_base"/>
+		</joint> -->
+
+		<joint name="joint1" type="fixed">
+			<parent link="container_base"/>
+			<child link="container_right"/>
+			<origin xyz="0 ${(width + thickness) / 2} 0" rpy="0 0 0"/>
+		</joint>
+
+		<joint name="joint2" type="fixed">
+			<parent link="container_base"/>
+			<child link="container_left"/>
+			<origin xyz="0 ${-(width + thickness) / 2} 0" rpy="0 0 0"/>
+		</joint>
+
+		<joint name="joint3" type="fixed">
+			<parent link="container_base"/>
+			<child link="container_forward"/>
+			<origin xyz="${(depth + thickness) / 2} 0 0" rpy="0 0 0"/>
+		</joint>
+
+		<joint name="joint4" type="fixed">
+			<parent link="container_base"/>
+			<child link="container_back"/>
+			<origin xyz="${-(depth + thickness) / 2} 0 0" rpy="0 0 0"/>
+		</joint>
+
+	</xacro:macro>
+	<xacro:container depth="0.41" width="0.65" height="0.13" thickness="0.01"/>
+</robot>

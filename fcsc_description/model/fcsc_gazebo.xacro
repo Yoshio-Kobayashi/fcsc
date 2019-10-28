@@ -1,0 +1,897 @@
+<!-- gazebo setting -->
+<robot name="gazebo_setting" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="use_RealSenseD435_ur5" params="attachment_height attachment_width attachment_depth">
+
+    <link name="camera_optical_link"/>
+
+    <link name="camera_body_link">
+      <collision>
+        <origin xyz="0.0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${0.025} ${0.09} ${0.025}"/>
+        </geometry>
+      </collision>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${0.025} ${0.09} ${0.025}"/>
+        </geometry>
+        <material name="camera_body_color">
+          <color rgba="0 0 0 1.0"/>
+        </material>
+      </visual>
+      <inertial>
+        <mass value="1e-5" />
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+      </inertial>
+    </link>
+
+    <link name="camera_attachment_1_link">
+      <collision>
+        <origin xyz="${0.01/2} 0 ${attachment_height/2 - 0.0375}" rpy="0 0 0"/>
+        <geometry>
+          <box size="${attachment_depth} ${attachment_width} ${attachment_height}"/>
+        </geometry>
+      </collision>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 ${pi/2.0} 0"/>
+        <geometry>
+          <mesh filename="package://fcsc_description/mesh/realsense_D435_mount.stl" scale="1 1 1"/>
+        </geometry>
+        <material name="realsense_attachment_color">
+          <color rgba="0.3 0.3 0.3 1.0"/>
+        </material>
+      </visual>
+      <inertial>
+        <mass value="1e-5" />
+        <origin xyz="0 0 0" rpy="0 ${pi/2.0} 0"/>
+        <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+      </inertial>
+    </link>
+
+    <joint name="camera_optical_joint" type="fixed">
+      <parent link="camera_body_link"/>
+      <child link="camera_optical_link"/>
+      <origin xyz="${0.025/2} 0 0" rpy="-1.57 0 -1.57"/>
+    </joint>
+
+    <joint name="realsense_attachment_joint" type="fixed">
+      <parent link="camera_attachment_1_link"/>
+      <child link="camera_body_link"/>
+      <origin xyz="${0.01 + 0.025/2} 0 ${0.0875}" rpy="0 0 0"/>
+    </joint>
+
+    <gazebo reference="camera_body_link">
+      <selfCollide>false</selfCollide>
+      <material>Gazebo/Black</material>
+      <sensor type="depth" name="realsense">
+        <always_on>1</always_on>
+        <update_rate>10</update_rate>
+        <visualize>true</visualize>
+        <camera>
+          <horizontal_fov>1.211222778</horizontal_fov>
+          <image>
+            <!-- high performance -->
+            <!-- <width>1920</width>
+            <height>1080</height> -->
+            <width>640</width>
+            <height>480</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.1</near>
+            <far>100</far>
+          </clip>
+          <depth_camera>
+            <output>true</output>
+          </depth_camera>
+        </camera>
+        <plugin name="realsense_controller" filename="libgazebo_ros_openni_kinect.so">
+          <alwaysOn>true</alwaysOn>
+          <updateRate>10.0</updateRate>
+          <cameraName>camera</cameraName>
+          <frameName>camera_optical_link</frameName>
+          <imageTopicName>rgb/image_raw</imageTopicName>
+          <depthImageTopicName>depth/image_raw</depthImageTopicName>
+          <pointCloudTopicName>depth/points</pointCloudTopicName>
+          <cameraInfoTopicName>rgb/camera_info</cameraInfoTopicName>
+          <depthImageCameraInfoTopicName>depth/camera_info</depthImageCameraInfoTopicName>
+          <pointCloudCutoff>0.2</pointCloudCutoff>
+          <pointCloudCutoffMax>5</pointCloudCutoffMax>
+          <!-- <pointCloudCutoffMax>1.5</pointCloudCutoffMax> -->
+          <distortionK1>0.0</distortionK1>
+          <distortionK2>0.0</distortionK2>
+          <distortionK3>0.0</distortionK3>
+          <distortionT1>0.0</distortionT1>
+          <distortionT2>0.0</distortionT2>
+          <CxPrime>0.0</CxPrime>
+          <Cx>0.0</Cx>
+          <Cy>0.0</Cy>
+          <focalLength>0.0</focalLength>
+        </plugin>
+        </sensor>
+    </gazebo>
+  </xacro:macro>
+
+  <xacro:macro name="use_hokuyo">
+  <!-- *************************************** Hokuyo laser *************************************** -->
+    <link name="hokuyo_link">
+		  <collision>
+			  <origin xyz="0 0 0" rpy="0 0 0"/>
+			  <geometry>
+				  <cylinder length="0.05" radius="0.025"/>
+			  </geometry>
+		  </collision>
+		  <visual>
+			  <origin xyz="0 0 0" rpy="0 0 0"/>
+			  <geometry>
+				  <cylinder length="0.05" radius="0.025"/>
+			  </geometry>
+		  </visual>
+		  <inertial>
+			  <mass value="1e-5" />
+			  <origin xyz="0 0 0" rpy="0 0 0"/>
+			  <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+		  </inertial>
+    </link>
+    <joint name="hokuyo_joint" type="fixed">
+		  <!--parent link="base_link"/-->
+		  <parent link="riser"/>
+		  <child link="hokuyo_link"/>
+		  <!--origin xyz="0.13 0 0.15" rpy="0 0 0"/-->
+		  <origin xyz="0.025 0 0.3" rpy="0 0 0"/>
+    </joint>
+	  <gazebo reference="hokuyo_link">
+		  <material>Gazebo/Black</material>
+		  <sensor type="ray" name="laser">
+			  <pose>0 0 0 0 0 0</pose>
+			  <visualize>true</visualize>
+			  <update_rate>40</update_rate>
+			  <ray>
+				  <scan>
+					  <horizontal>
+						  <samples>720</samples>
+						  <resolution>1</resolution>
+						  <!--min_angle>-2.35619449</min_angle>
+						  <max_angle>2.35619449</max_angle-->
+						  <min_angle>-1.570796327</min_angle>
+						  <max_angle>1.570796327</max_angle>
+					  </horizontal>
+				  </scan>
+				  <range>
+					  <min>0.10</min>
+					  <max>10.0</max>
+					  <resolution>0.01</resolution>
+				  </range>
+				  <noise>
+					  <type>Gaussian</type>
+					  <mean>0.0</mean>
+					  <stddev>0.01</stddev>
+				  </noise>
+			  </ray>
+			  <plugin name="hokuyo_laser" filename="libgazebo_ros_laser.so">
+				  <topicName>/scan</topicName>
+				  <frameName>hokuyo_link</frameName>
+			  </plugin>
+		  </sensor>
+	  </gazebo>
+	</xacro:macro>
+
+  <xacro:macro name="use_hokuyo_vertical">
+  <!-- ***************************** Hokuyo Vertical laser ********************************** -->
+    <link name="hokuyo_vertical_link">
+		  <collision>
+			  <origin xyz="0 0 0" rpy="0 0 0"/>
+			  <geometry>
+				  <cylinder length="0.05" radius="0.025"/>
+			  </geometry>
+		  </collision>
+		  <visual>
+			  <origin xyz="0 0 0" rpy="0 0 0"/>
+			  <geometry>
+				  <cylinder length="0.05" radius="0.025"/>
+			  </geometry>
+		  </visual>
+		  <inertial>
+			  <mass value="1e-5" />
+			  <origin xyz="0 0 0" rpy="0 0 0"/>
+			  <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+		  </inertial>
+    </link>
+    <joint name="hokuyo_vertical_joint" type="fixed">
+		  <parent link="riser"/>
+		  <child link="hokuyo_vertical_link"/>
+		  <origin xyz="0.025 0 0.5" rpy="0 1.57079 0"/>
+    </joint>
+	  <gazebo reference="hokuyo_vertical_link">
+		  <material>Gazebo/Black</material>
+		  <sensor type="ray" name="vertical_laser">
+			  <pose>0 0 0 0 0 0</pose>
+			  <visualize>true</visualize>
+			  <update_rate>40</update_rate>
+			  <ray>
+				  <scan>
+					  <horizontal>
+						  <samples>720</samples>
+						  <resolution>1</resolution>
+						  <!--min_angle>-2.35619449</min_angle>
+						  <max_angle>2.35619449</max_angle-->
+						  <min_angle>-1.570796327</min_angle>
+						  <max_angle>1.570796327</max_angle>
+					  </horizontal>
+				  </scan>
+				  <range>
+					  <min>0.10</min>
+					  <max>10.0</max>
+					  <resolution>0.01</resolution>
+				  </range>
+				  <noise>
+					  <type>Gaussian</type>
+					  <mean>0.0</mean>
+					  <stddev>0.01</stddev>
+				  </noise>
+			  </ray>
+			  <plugin name="hokuyo_vertical_laser" filename="libgazebo_ros_laser.so">
+				  <topicName>/vertical_scan</topicName>
+				  <frameName>hokuyo_vertical_link</frameName>
+			  </plugin>
+		  </sensor>
+	  </gazebo>
+	</xacro:macro>
+
+	<xacro:macro name="use_kinect_arm">
+	<!-- ********************************** Kinect [arm or gripper] ***************************************** -->
+	  <joint name="kinect_arm_joint" type="fixed">
+		  <parent link="link6"/>
+		  <child link="kinect_base_link"/>
+		  <!--origin xyz="0.5 0 0.2" rpy="0 0 0"/-->
+		  <origin xyz="0 0 ${0.1/2}" rpy="0 0 0"/>
+	  </joint>
+	  <!--joint name="kinect_arm_joint" type="fixed">
+		  <parent link="base_link"/>
+		  <child link="kinect_base_link"/>
+		  <origin xyz="0 0 0.5" rpy="0 0 -1.57"/>
+	  </joint-->
+
+	  <joint name="kinect_joint" type="fixed">
+		  <parent link="kinect_base_link"/>
+		  <child link="kinect_link"/>
+		  <origin xyz="0 0 0" rpy="-1.57 0 -1.57"/>
+	  </joint>
+
+	  <link name="kinect_base_link">
+		  <collision>
+			  <origin xyz="0 0 0" rpy="0 0 0"/>
+			  <geometry>
+				  <cylinder length="0.05" radius="0.025"/>
+			  </geometry>
+		  </collision>
+		  <visual>
+			  <origin xyz="0 0 0" rpy="0 0 0"/>
+			  <geometry>
+				  <cylinder length="0.05" radius="0.025"/>
+			  </geometry>
+		  </visual>
+		  <inertial>
+			  <mass value="1e-5" />
+			  <origin xyz="0 0 0" rpy="0 0 0"/>
+			  <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+		  </inertial>
+	  </link>
+
+	  <link name="kinect_link"/>
+
+	  <gazebo reference="kinect_base_link">
+      <selfCollide>false</selfCollide>
+		  <material>Gazebo/Black</material>
+		  <sensor type="depth" name="kinect">
+			  <always_on>1</always_on>
+			  <visualize>true</visualize>
+			  <camera>
+			  <horizontal_fov>1.047</horizontal_fov>
+			  <image>
+				  <width>640</width>
+				  <height>480</height>
+				  <format>R8G8B8</format>
+			  </image>
+			  <clip>
+				  <near>0.1</near>
+				  <far>100</far>
+			  </clip>
+			  </camera>
+			  <plugin name="kinect_controller" filename="libgazebo_ros_openni_kinect.so">
+				  <alwaysOn>true</alwaysOn>
+				  <updateRate>10.0</updateRate>
+				  <cameraName>kinect</cameraName>
+				  <frameName>kinect_link</frameName>
+				  <imageTopicName>rgb/image_raw</imageTopicName>
+				  <depthImageTopicName>depth/image_raw</depthImageTopicName>
+				  <pointCloudTopicName>depth/points</pointCloudTopicName>
+				  <cameraInfoTopicName>rgb/camera_info</cameraInfoTopicName>
+				  <depthImageCameraInfoTopicName>depth/camera_info</depthImageCameraInfoTopicName>
+				  <pointCloudCutoff>0.4</pointCloudCutoff>
+				  <hackBaseline>0.07</hackBaseline>
+				  <distortionK1>0.0</distortionK1>
+				  <distortionK2>0.0</distortionK2>
+				  <distortionK3>0.0</distortionK3>
+				  <distortionT1>0.0</distortionT1>
+				  <distortionT2>0.0</distortionT2>
+				  <CxPrime>0.0</CxPrime>
+				  <Cx>0.0</Cx>
+				  <Cy>0.0</Cy>
+				  <focalLength>0.0</focalLength>
+			  </plugin>
+			  </sensor>
+	  </gazebo>
+	</xacro:macro>
+
+	<xacro:macro name="use_kinect_riser">
+	<!-- ********************************** Kinect [riser] ***************************************** -->
+	  <joint name="kinect_riser_joint" type="fixed">
+		  <parent link="riser"/>
+		  <child link="kinect_base_link2"/>
+		  <origin xyz="0.025 0 0.5" rpy="0 0 0"/>
+	  </joint>
+	  <joint name="kinect_joint2" type="fixed">
+		  <parent link="kinect_base_link2"/>
+		  <child link="kinect_link2"/>
+		  <origin xyz="0 0 0" rpy="-1.57 0 -1.57"/>
+	  </joint>
+
+	  <link name="kinect_base_link2">
+		  <collision>
+			  <origin xyz="0 0 0" rpy="0 0 0"/>
+			  <geometry>
+				  <cylinder length="0.05" radius="0.025"/>
+			  </geometry>
+		  </collision>
+		  <visual>
+			  <origin xyz="0 0 0" rpy="0 0 0"/>
+			  <geometry>
+				  <cylinder length="0.05" radius="0.025"/>
+			  </geometry>
+		  </visual>
+		  <inertial>
+			  <mass value="1e-5" />
+			  <origin xyz="0 0 0" rpy="0 0 0"/>
+			  <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+		  </inertial>
+	  </link>
+
+	  <link name="kinect_link2"/>
+
+	  <gazebo reference="kinect_base_link2">
+		  <material>Gazebo/Black</material>
+		  <sensor type="depth" name="kinect2">
+			  <always_on>1</always_on>
+			  <visualize>true</visualize>
+			  <camera>
+			  <horizontal_fov>1.047</horizontal_fov>
+			  <image>
+				  <width>640</width>
+				  <height>480</height>
+				  <format>R8G8B8</format>
+			  </image>
+			  <clip>
+				  <near>0.1</near>
+				  <far>100</far>
+			  </clip>
+			  </camera>
+			  <plugin name="kinect_controller_for_riser" filename="libgazebo_ros_openni_kinect.so">
+				  <alwaysOn>true</alwaysOn>
+				  <updateRate>10.0</updateRate>
+				  <cameraName>kinect2</cameraName>
+				  <frameName>kinect_link2</frameName>
+				  <imageTopicName>rgb/image_raw</imageTopicName>
+				  <depthImageTopicName>depth/image_raw</depthImageTopicName>
+				  <pointCloudTopicName>depth/points</pointCloudTopicName>
+				  <cameraInfoTopicName>rgb/camera_info</cameraInfoTopicName>
+				  <depthImageCameraInfoTopicName>depth/camera_info</depthImageCameraInfoTopicName>
+				  <pointCloudCutoff>0.4</pointCloudCutoff>
+				  <hackBaseline>0.07</hackBaseline>
+				  <distortionK1>0.0</distortionK1>
+				  <distortionK2>0.0</distortionK2>
+				  <distortionK3>0.0</distortionK3>
+				  <distortionT1>0.0</distortionT1>
+				  <distortionT2>0.0</distortionT2>
+				  <CxPrime>0.0</CxPrime>
+				  <Cx>0.0</Cx>
+				  <Cy>0.0</Cy>
+				  <focalLength>0.0</focalLength>
+			  </plugin>
+			  </sensor>
+	  </gazebo>
+  </xacro:macro>
+
+	<xacro:macro name="use_kinect_ancle">
+	<!-- ********************************** Kinect [arm or gripper] ***************************************** -->
+	  <joint name="kinect_ancle_joint" type="fixed">
+		  <parent link="link6"/>
+		  <child link="kinect_base_link"/>
+		  <origin xyz="${0.05/2} 0 ${0.04/2}" rpy="0 0 0"/>
+	  </joint>
+
+	  <joint name="kinect_joint" type="fixed">
+		  <parent link="kinect_base_link"/>
+		  <child link="kinect_link"/>
+		  <origin xyz="0 0 0" rpy="-1.57 0 -1.57"/>
+	  </joint>
+
+	  <link name="kinect_base_link">
+		  <collision>
+			  <origin xyz="0 0 ${0.05/2}" rpy="0 0 0"/>
+			  <geometry>
+				  <cylinder length="0.05" radius="0.025"/>
+			  </geometry>
+		  </collision>
+		  <visual>
+			  <origin xyz="0 0 ${0.05/2}" rpy="0 0 0"/>
+			  <geometry>
+				  <cylinder length="0.05" radius="0.025"/>
+			  </geometry>
+		  </visual>
+		  <inertial>
+			  <mass value="1e-5" />
+			  <origin xyz="0 0 ${0.05/2}" rpy="0 0 0"/>
+			  <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+		  </inertial>
+	  </link>
+
+	  <link name="kinect_link"/>
+
+	  <gazebo reference="kinect_base_link">
+      <selfCollide>false</selfCollide>
+		  <material>Gazebo/Black</material>
+		  <sensor type="depth" name="kinect">
+			  <always_on>1</always_on>
+			  <visualize>true</visualize>
+			  <camera>
+			  <horizontal_fov>1.047</horizontal_fov>
+			  <image>
+				  <width>640</width>
+				  <height>480</height>
+				  <format>R8G8B8</format>
+			  </image>
+			  <clip>
+				  <near>0.1</near>
+				  <far>100</far>
+			  </clip>
+			  </camera>
+			  <plugin name="kinect_controller" filename="libgazebo_ros_openni_kinect.so">
+				  <alwaysOn>true</alwaysOn>
+				  <updateRate>10.0</updateRate>
+				  <cameraName>kinect</cameraName>
+				  <frameName>kinect_link</frameName>
+				  <imageTopicName>rgb/image_raw</imageTopicName>
+				  <depthImageTopicName>depth/image_raw</depthImageTopicName>
+				  <pointCloudTopicName>depth/points</pointCloudTopicName>
+				  <cameraInfoTopicName>rgb/camera_info</cameraInfoTopicName>
+				  <depthImageCameraInfoTopicName>depth/camera_info</depthImageCameraInfoTopicName>
+				  <pointCloudCutoff>0.4</pointCloudCutoff>
+				  <hackBaseline>0.07</hackBaseline>
+				  <distortionK1>0.0</distortionK1>
+				  <distortionK2>0.0</distortionK2>
+				  <distortionK3>0.0</distortionK3>
+				  <distortionT1>0.0</distortionT1>
+				  <distortionT2>0.0</distortionT2>
+				  <CxPrime>0.0</CxPrime>
+				  <Cx>0.0</Cx>
+				  <Cy>0.0</Cy>
+				  <focalLength>0.0</focalLength>
+			  </plugin>
+			  </sensor>
+	  </gazebo>
+	</xacro:macro>
+
+  <!-- <xacro:macro name="use_kinect_ur5" params="link_length"> -->
+  <!-- realsense -->
+  <property name="kinect_height" value="0.025" />
+  <property name="kinect_width" value="0.13" />
+  <property name="kinect_depth" value="0.016" />
+
+	<xacro:macro name="use_RealSenseSR300_ur5" params="attachment_height attachment_width attachment_depth">
+<!-- <property name="link_length" value="0.09" /> -->
+	<!-- ********************************** Kinect [arm or gripper] ***************************************** -->
+	  <!--joint name="kinect_ancle_joint" type="fixed">
+		  <parent link="link6"/>
+		  <child link="kinect_base_link"/>
+		  <origin xyz="${0.05/2} 0 ${0.04/2}" rpy="0 0 0"/>
+	  </joint-->
+
+    <!-- <property name="kinect_height" value="0.03" />
+    <property name="kinect_width" value="0.28" />
+    <property name="kinect_depth" value="0.065" /> -->
+
+
+    <!-- <link name="camera_link"/>
+	  <joint name="kinect_joint" type="fixed">
+      <parent link="kinect_link"/>
+      <child link="camera_link"/>
+		  <origin xyz="0 0 0" rpy="-1.57 0 -1.57"/>
+	  </joint> -->
+
+    <link name="camera_optical_link"/>
+	  <joint name="kinect_joint" type="fixed">
+      <parent link="camera_body_link"/>
+      <child link="camera_optical_link"/>
+		  <origin xyz="0 0 0" rpy="-1.57 0 -1.57"/>
+	  </joint>
+
+	  <link name="camera_body_link">
+		  <collision>
+			  <origin xyz="0.005 0 0" rpy="0 0 0"/>
+			  <geometry>
+          <box size="${kinect_depth-0.005} ${kinect_width} ${kinect_height}"/>
+			  </geometry>
+		  </collision>
+		  <visual>
+			  <origin xyz="0 0 0" rpy="0 0 0"/>
+			  <geometry>
+          <box size="${kinect_depth} ${kinect_width} ${kinect_height}"/>
+			  </geometry>
+        <material name="camera_body_color">
+          <color rgba="0 0 0 1.0"/>
+        </material>
+		  </visual>
+		  <inertial>
+			  <mass value="1e-5" />
+			  <origin xyz="0 0 0" rpy="0 0 0"/>
+			  <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+		  </inertial>
+	  </link>
+
+    <link name="camera_attachment_3_link">
+      <collision>
+			  <origin xyz="${0.06/2} 0 ${0.035/2}" rpy="0 0 0"/>
+			  <geometry>
+          <box size="0.06 0.07 0.035 "/>
+			  </geometry>
+		  </collision>
+		  <visual>
+			  <origin xyz="${0.06/2} 0 ${0.035/2}" rpy="0 0 0"/>
+			  <geometry>
+          <box size="0.06 0.07 0.035"/>
+			  </geometry>
+        <material name="kinect_attachment_color">
+          <color rgba="0.3 0.3 0.3 1.0"/>
+        </material>
+		  </visual>
+		  <inertial>
+			  <mass value="1e-5" />
+			  <origin xyz="${0.06/2} 0 ${0.035/2}" rpy="0 0 0"/>
+			  <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+		  </inertial>
+    </link>
+    <joint name="realsense_mount_joint" type="fixed">
+      <parent link="camera_attachment_2_link"/>
+      <child link="camera_attachment_3_link"/>
+      <!-- <origin xyz="${0.0065} 0 ${0.07/2.0}" rpy="0 0 0"/> -->
+      <origin xyz="${0.0065} 0 ${0.025/2.0}" rpy="0 0 0"/>
+    </joint>
+
+    <link name="camera_attachment_2_link">
+      <collision>
+			  <origin xyz="0 0 0" rpy="0 ${pi/2.0} 0"/>
+			  <!-- <origin xyz="0 0 0" rpy="0 ${-pi/2.0} 0"/> -->
+			  <geometry>
+          <!-- <mesh filename="package://fcsc_description/mesh/realsense_mount_1.stl" scale="1 1 1"/> -->
+          <mesh filename="package://fcsc_description/mesh/realsense_mount_small_1.stl" scale="1 1 1"/>
+			  </geometry>
+		  </collision>
+		  <visual>
+			  <!-- <origin xyz="0 0 ${attachment_height/2}" rpy="0 0 0"/> -->
+			  <origin xyz="0 0 0" rpy="0 ${pi/2.0} 0"/>
+        <!-- <origin xyz="0 0 0" rpy="0 ${-pi/2.0} 0"/> -->
+			  <geometry>
+          <!-- <mesh filename="package://fcsc_description/mesh/realsense_mount_1.stl" scale="1 1 1"/> -->
+          <mesh filename="package://fcsc_description/mesh/realsense_mount_small_1.stl" scale="1 1 1"/>
+			  </geometry>
+        <material name="kinect_attachment_color">
+          <color rgba="0.3 0.3 0.3 1.0"/>
+        </material>
+		  </visual>
+		  <inertial>
+			  <mass value="1e-5" />
+			  <!-- <origin xyz="0 0 ${attachment_height/2}" rpy="0 0 0"/> -->
+			  <origin xyz="0 0 0" rpy="0 ${pi/2.0} 0"/>
+        <!-- <origin xyz="0 0 0" rpy="0 ${-pi/2.0} 0"/> -->
+			  <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+		  </inertial>
+    </link>
+    <joint name="kinect_mount_joint" type="fixed">
+      <parent link="camera_attachment_1_link"/>
+      <child link="camera_attachment_2_link"/>
+      <!-- <origin xyz="0.01 0 ${0.1575 - 0.0375 - 0.07/2.0}" rpy="0 0 0"/> -->
+      <origin xyz="0.01 0 ${0.1125 - 0.0375 - 0.025/2.0}" rpy="0 0 0"/>
+    </joint>
+
+	  <link name="camera_attachment_1_link">
+		  <collision>
+			  <!-- <origin xyz="0 0 ${attachment_height/2}" rpy="0 0 0"/> -->
+			  <origin xyz="${0.01/2} 0 ${attachment_height/2 - 0.0375}" rpy="0 0 0"/>
+			  <geometry>
+          <box size="${attachment_depth} ${attachment_width} ${attachment_height}"/>
+			  </geometry>
+		  </collision>
+		  <visual>
+			  <!-- <origin xyz="0 0 ${attachment_height/2}" rpy="0 0 0"/> -->
+			  <!-- <origin xyz="${0.01} 0 0" rpy="${pi} ${pi/2.0} 0"/> -->
+        <origin xyz="0 0 0" rpy="0 ${pi/2.0} 0"/>
+			  <geometry>
+          <!-- <mesh filename="package://fcsc_description/mesh/realsense_mount_2.stl" scale="1 1 1"/> -->
+          <mesh filename="package://fcsc_description/mesh/realsense_mount_small_2.stl" scale="1 1 1"/>
+          <!-- <box size="${attachment_depth} ${attachment_width} ${attachment_height}"/> -->
+			  </geometry>
+        <material name="kinect_attachment_color">
+          <color rgba="0.3 0.3 0.3 1.0"/>
+        </material>
+		  </visual>
+		  <inertial>
+			  <mass value="1e-5" />
+			  <!-- <origin xyz="0 0 ${attachment_height/2}" rpy="0 0 0"/> -->
+			  <!-- <origin xyz="${0.01} 0 0" rpy="${pi} ${pi/2.0} 0"/> -->
+        <origin xyz="0 0 0" rpy="0 ${pi/2.0} 0"/>
+			  <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+		  </inertial>
+	  </link>
+
+	  <!-- <joint name="kinect_attachment_joint" type="fixed"> -->
+		  <!-- <parent link="camera_attachment_1_link"/> -->
+      <!-- <child link="camera_body_link"/> -->
+      <!-- <origin xyz="${0.025/2+0.005/2} 0 ${attachment_height - 0.025/2}" rpy="0 ${0} 0"/> -->
+      <!-- <origin xyz="${0.025/2+attachment_depth/2} 0 ${attachment_height - 0.025/2}" rpy="0 ${0} 0"/> -->
+      <!-- <origin xyz="${kinect_depth/2+attachment_depth/2} 0 ${attachment_height - kinect_depth/2}" rpy="0 ${0} 0"/> -->
+
+      <!-- <origin xyz="${kinect_depth/2+attachment_depth/2} 0 ${attachment_height - 0.025}" rpy="0 ${0} 0"/> -->
+
+      <!-- realsense -->
+      <!-- <origin xyz="${kinect_depth/2+attachment_depth/2 + 0.062} 0 ${attachment_height-kinect_height/2.0+0.0425}" rpy="0 ${0} 0"/> -->
+	  <!-- </joint> -->
+
+    <joint name="kinect_attachment_joint" type="fixed">
+      <parent link="camera_attachment_3_link"/>
+      <child link="camera_body_link"/>
+      <origin xyz="${0.06+kinect_depth/2} 0 ${kinect_height/2+0.0175}" rpy="0 0 0"/>
+    </joint>
+
+    <!-- <link name="camera_body_link"/> -->
+
+    <gazebo reference="camera_body_link">
+      <selfCollide>false</selfCollide>
+		  <material>Gazebo/Black</material>
+		  <sensor type="depth" name="kinect">
+			  <always_on>1</always_on>
+        <update_rate>10</update_rate>
+			  <visualize>true</visualize>
+        <camera>
+          <horizontal_fov>1.186823891356144</horizontal_fov>
+          <image>
+            <!-- high performance -->
+            <width>1920</width>
+            <height>1080</height>
+            <!-- <width>640</width>
+            <height>480</height> -->
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.1</near>
+            <far>100</far>
+          </clip>
+          <depth_camera>
+            <output>true</output>
+          </depth_camera>
+        </camera>
+			  <plugin name="realsense_controller" filename="libgazebo_ros_openni_kinect.so">
+				  <alwaysOn>true</alwaysOn>
+				  <updateRate>10.0</updateRate>
+				  <cameraName>camera</cameraName>
+				  <frameName>camera_optical_link</frameName>
+				  <imageTopicName>rgb/image_raw</imageTopicName>
+				  <depthImageTopicName>depth/image_raw</depthImageTopicName>
+				  <pointCloudTopicName>depth/points</pointCloudTopicName>
+				  <cameraInfoTopicName>rgb/camera_info</cameraInfoTopicName>
+				  <depthImageCameraInfoTopicName>depth/camera_info</depthImageCameraInfoTopicName>
+          <pointCloudCutoff>0.2</pointCloudCutoff>
+          <pointCloudCutoffMax>1.5</pointCloudCutoffMax>
+				  <distortionK1>0.0</distortionK1>
+				  <distortionK2>0.0</distortionK2>
+				  <distortionK3>0.0</distortionK3>
+				  <distortionT1>0.0</distortionT1>
+				  <distortionT2>0.0</distortionT2>
+				  <CxPrime>0.0</CxPrime>
+				  <Cx>0.0</Cx>
+				  <Cy>0.0</Cy>
+				  <focalLength>0.0</focalLength>
+			  </plugin>
+			  </sensor>
+	  </gazebo>
+    <!-- <gazebo reference="kinect_body_link"> -->
+    <!-- <horizontal_fov>1.047</horizontal_fov> -->
+    <!-- <frameName>kinect_link</frameName> -->
+    <!-- <pointCloudCutoff>0.4</pointCloudCutoff> -->
+    <!-- <hackBaseline>0.07</hackBaseline> -->
+	</xacro:macro>
+
+	<!--  ********************************  gripper ********************************  -->
+	<!--gazebo>
+	  <gripper name="gripper">
+	    <grasp_check>
+	      <attach_steps>1</attach_steps>
+	      <detach_steps>1</detach_steps>
+	      <min_contact_count>1</min_contact_count>
+	    </grasp_check>
+	    <gripper_link>left_finger</gripper_link>
+	    <gripper_link>right_finger</gripper_link>
+	    <palm_link>palm</palm_link>
+	  </gripper>
+	</gazebo-->
+<!--gazebo>
+   <plugin name="gazebo_grasp_fix" filename="libgazebo_grasp_fix.so">
+        <arm>
+           <arm_name>arm</arm_name>
+           <palm_link>link8</palm_link>
+           <gripper_link>left_finger</gripper_link>
+           <gripper_link>right_finger</gripper_link>
+        </arm>
+       <forces_angle_tolerance>100</forces_angle_tolerance>
+       <update_rate>10</update_rate>
+       <grip_count_threshold>5</grip_count_threshold>
+       <max_grip_count>10</max_grip_count>
+       <release_tolerance>0.005</release_tolerance>
+       <disable_collisions_on_attach>false</disable_collisions_on_attach>
+       <contact_topic>__default_topic__</contact_topic>
+    </plugin>
+</gazebo-->
+
+  <xacro:macro name="use_imu">
+<!-- ******************************** IMU ******************************** -->
+    <link name="imu_link">
+		  <inertial>
+			  <mass value="1e-5" />
+			  <origin xyz="0 0 0" rpy="0 0 0"/>
+			  <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+		  </inertial>
+      <collision>
+        <origin xyz="0 0 0" />
+        <geometry>
+          <box size="0.01 0.01 0.01"/>
+        </geometry>
+      </collision>
+      <visual>
+        <origin xyz="0 0 0" />
+        <geometry>
+          <box size="0.01 0.01 0.01" />
+        </geometry>
+        <material name="orange" />
+      </visual>
+    </link>
+    <joint name="imu_joint" type="fixed">
+      <axis xyz="1 0 0"/>
+      <parent link="base_link"/>
+      <child link="imu_link"/>
+      <origin xyz="-0.152 0 0" ryp="0 0 0"/>
+    </joint>
+    <!--gazebo>
+      <plugin name="imu" filename="libgazebo_ros_imu.so">
+        <alwaysOn>true</alwaysOn>
+        <serviceName>/imu</serviceName>
+        <topicName>/imu</topicName>
+        <bodyName>imu_link</bodyName>
+        <gaussianNoise>0.0</gaussianNoise>
+        <xyzOffset>0.0</xyzOffset>
+        <rpyOffset>0.0</rpyOffset>
+        <updateRate>1000</updateRate>
+      </plugin>
+    </gazebo-->
+    <gazebo>
+      <plugin name="imu" filename="libhector_gazebo_ros_imu.so">
+        <updateRate>1000</updateRate>
+        <bodyName>imu_link</bodyName>
+        <topicName>/imu</topicName>
+        <serviceName>/imu/calibrate</serviceName>
+        <accelOffset>0.0 0.0 0.0</accelOffset>
+        <accelDrift>0.0 0.0 0.0</accelDrift>
+        <accelDriftFrequency>0.0 0.0 0.0</accelDriftFrequency>
+        <accelGaussianNoise>0.0 0.0 0.0</accelGaussianNoise>
+        <rateOffset>0.0 0.0 0.0</rateOffset>
+        <rateDrift>0.0 0.0 0.0</rateDrift>
+        <rateDriftFrequency>0.0 0.0 0.0</rateDriftFrequency>
+        <rateGaussianNoise>0.0 0.0 0.0</rateGaussianNoise>
+        <headingOffset>0.0</headingOffset>
+        <headingDrift>0.0</headingDrift>
+        <headingDriftFrequency>0.0</headingDriftFrequency>
+        <headingGaussianNoise>0.0</headingGaussianNoise>
+        <rpyOffset>0.0 0.0 0.0</rpyOffset>
+        <xyzOffset>0.0 0.0 0.0</xyzOffset>
+        <gaussianNoise>0.0</gaussianNoise>
+      </plugin>
+    </gazebo>
+  </xacro:macro>
+
+  <xacro:macro name="use_torque">
+<!-- ************************ Show Torque ***************************** -->
+	  <gazebo reference="arm_riser">
+		  <provideFeedback>1</provideFeedback>
+	  </gazebo>
+	  <gazebo reference="joint1">
+		  <provideFeedback>1</provideFeedback>
+	  </gazebo>
+	  <gazebo reference="joint2">
+		  <provideFeedback>1</provideFeedback>
+	  </gazebo>
+	  <gazebo reference="joint3">
+		  <provideFeedback>1</provideFeedback>
+	  </gazebo>
+	  <gazebo reference="joint4">
+		  <provideFeedback>1</provideFeedback>
+	  </gazebo>
+	  <gazebo reference="joint5">
+		  <provideFeedback>1</provideFeedback>
+	  </gazebo>
+	  <gazebo reference="joint6">
+		  <provideFeedback>1</provideFeedback>
+	  </gazebo>
+	  <gazebo reference="joint7">
+		  <provideFeedback>1</provideFeedback>
+	  </gazebo>
+    <gazebo>
+	    <plugin name="arm_riser_ft" filename="libgazebo_ros_ft_sensor.so">
+	      <robotNamespace>/dulcinea_mini_7dof_arm/arm_riser</robotNamespace>
+	      <jointName>arm_riser</jointName>
+	      <topicName>force_torque</topicName>
+	      <gaussianNoise>0.0</gaussianNoise>
+	      <updateRate>100.0</updateRate>
+	    </plugin>
+	    <plugin name="joint1_ft" filename="libgazebo_ros_ft_sensor.so">
+	      <robotNamespace>/dulcinea_mini_7dof_arm/joint1</robotNamespace>
+	      <jointName>joint1</jointName>
+	      <topicName>force_torque</topicName>
+	      <gaussianNoise>0.0</gaussianNoise>
+	      <updateRate>100.0</updateRate>
+	    </plugin>
+	    <plugin name="joint2_ft" filename="libgazebo_ros_ft_sensor.so">
+	      <robotNamespace>/dulcinea_mini_7dof_arm/joint2</robotNamespace>
+	      <jointName>joint2</jointName>
+	      <topicName>force_torque</topicName>
+	      <gaussianNoise>0.0</gaussianNoise>
+	      <updateRate>100.0</updateRate>
+	    </plugin>
+	    <plugin name="joint3_ft" filename="libgazebo_ros_ft_sensor.so">
+	      <robotNamespace>/dulcinea_mini_7dof_arm/joint3</robotNamespace>
+	      <jointName>joint3</jointName>
+	      <topicName>force_torque</topicName>
+	      <gaussianNoise>0.0</gaussianNoise>
+	      <updateRate>100.0</updateRate>
+	    </plugin>
+	    <plugin name="joint4_ft" filename="libgazebo_ros_ft_sensor.so">
+	      <robotNamespace>/dulcinea_mini_7dof_arm/joint4</robotNamespace>
+	      <jointName>joint4</jointName>
+	      <topicName>force_torque</topicName>
+	      <gaussianNoise>0.0</gaussianNoise>
+	      <updateRate>100.0</updateRate>
+	    </plugin>
+	    <plugin name="joint5_ft" filename="libgazebo_ros_ft_sensor.so">
+	      <robotNamespace>/dulcinea_mini_7dof_arm/joint5</robotNamespace>
+	      <jointName>joint5</jointName>
+	      <topicName>force_torque</topicName>
+	      <gaussianNoise>0.0</gaussianNoise>
+	      <updateRate>100.0</updateRate>
+	    </plugin>
+	    <plugin name="joint6_ft" filename="libgazebo_ros_ft_sensor.so">
+	      <robotNamespace>/dulcinea_mini_7dof_arm/joint6</robotNamespace>
+	      <jointName>joint6</jointName>
+	      <topicName>force_torque</topicName>
+	      <gaussianNoise>0.0</gaussianNoise>
+	      <updateRate>100.0</updateRate>
+	    </plugin>
+	    <plugin name="joint7_ft" filename="libgazebo_ros_ft_sensor.so">
+	      <robotNamespace>/dulcinea_mini_7dof_arm/joint7</robotNamespace>
+	      <jointName>joint7</jointName>
+	      <topicName>force_torque</topicName>
+	      <gaussianNoise>0.0</gaussianNoise>
+	      <updateRate>100.0</updateRate>
+	    </plugin>
+	  </gazebo>
+	</xacro:macro>
+</robot>

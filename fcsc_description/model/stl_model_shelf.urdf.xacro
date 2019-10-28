@@ -1,0 +1,88 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="shelf">
+  <xacro:arg name="marker_size" default="3"/>
+  <xacro:arg name="marker_id" default="40"/>
+
+  <property name="marker_size_p" value="${$(arg marker_size) * 0.01}"/>
+  <property name="marker_id_p" value="$(arg marker_id)"/>
+
+  <xacro:macro name="box_inertial" params="mass x y z *origin">
+    <inertial>
+      <mass value="${mass}" />
+      <xacro:insert_block name="origin" />
+      <inertia  ixx="${mass*(y*y+z*z)/12}" ixy = "0" ixz = "0"
+                iyy="${mass*(x*x+z*z)/12}" iyz = "0"
+                izz="${mass*(x*x+y*y)/12}" />
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="ar_marker" params="ar_marker_id ar_marker_size parent *origin">
+    <link name="ar_marker_${ar_marker_id}">
+      <xacro:box_inertial mass="0.0000001" x="${ar_marker_size}" y="${ar_marker_size}" z="0.0001">
+        <origin xyz="0 0 0" rpy="0 0 1.57" />
+      </xacro:box_inertial>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 1.57"/>
+        <geometry>
+          <box size="${ar_marker_size} ${ar_marker_size} 0.0001"/>
+        </geometry>
+      </collision>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 1.57"/>
+        <geometry>
+          <box size="${ar_marker_size} ${ar_marker_size} 0.0001"/>
+        </geometry>
+        <material name="ar_marker_${ar_marker_id}">
+          <texture filename="package://fcsc_description/media/materials/textures/MarkerData_${ar_marker_id}.png"/>
+        </material>
+      </visual>
+    </link>
+    <gazebo reference="ar_marker_${ar_marker_id}">
+      <material>ar_marker_${ar_marker_id}</material>
+    </gazebo>
+    <joint name="ar_joint_${ar_marker_id}" type="fixed">
+      <parent link="${parent}"/>
+      <child link="ar_marker_${ar_marker_id}"/>
+      <xacro:insert_block name="origin" />
+    </joint>
+  </xacro:macro>
+
+  <xacro:macro name="shelf">
+    <link name="shelf">
+      <inertial>
+        <origin xyz="0 0 0"/>
+        <mass value="5"/>
+        <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+      </inertial>
+      <collision>
+        <origin xyz="0 0 0"/>
+        <geometry>
+          <mesh filename="package://fcsc_description/mesh/shelf.stl" scale="1 1 1"/>
+        </geometry>
+      </collision>
+      <visual>
+        <origin xyz="0 0 0"/>
+        <geometry>
+          <mesh filename="package://fcsc_description/mesh/shelf.stl" scale="1 1 1"/>
+        </geometry>
+      </visual>
+    </link>
+    <link name="world"/>
+    <joint name="fix" type="fixed">
+      <parent link="world"/>
+      <child link="shelf"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:shelf/>
+  <xacro:ar_marker ar_marker_id="${marker_id_p}" ar_marker_size="${marker_size_p}" parent="shelf">
+    <origin xyz="${-0.2-0.03} ${0.45-marker_size_p/2} ${0.59+(0.035-marker_size_p/2.0)}" rpy="1.57 0 -1.57"/>
+  </xacro:ar_marker>
+  <xacro:ar_marker ar_marker_id="${marker_id_p+1}" ar_marker_size="${marker_size_p}" parent="shelf">
+    <origin xyz="${-0.2-0.03} ${0} ${0.59+(0.035-marker_size_p/2.0)}" rpy="1.57 0 -1.57"/>
+  </xacro:ar_marker>
+  <xacro:ar_marker ar_marker_id="${marker_id_p+2}" ar_marker_size="${marker_size_p}" parent="shelf">
+    <origin xyz="${-0.2-0.03} ${-0.45+marker_size_p/2} ${0.59+(0.035-marker_size_p/2.0)}" rpy="1.57 0 -1.57"/>
+  </xacro:ar_marker>
+</robot>

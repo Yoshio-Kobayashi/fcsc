@@ -1,0 +1,217 @@
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="daihen_ur5">
+
+<!-- UR5 attachment type -->
+<xacro:arg name="maue_ur5" default="false"/>
+<xacro:arg name="mayoko_ur5" default="false"/>
+<xacro:arg name="naname_ur5" default="true"/>
+
+<property name="ur5_mount_z_offset" value="0.0"/>
+<!-- <property name="ur5_mount_z_offset" value="-0.04"/> -->
+<property name="ur5_base_radius" value="0.07"/>
+
+<property name="container_mount_offset" value="0.388"/>
+<property name="container_short_side" value="0.41"/>
+
+<property name="daihen_boad_offset" value="0.25"/>
+
+<property name="container_z_offset" value="0.169"/>
+<!-- <property name="container_z_offset" value="0.14"/> -->
+<property name="container_x_offset" value="0.0"/>
+
+<property name="cylinder_length" value="0.0"/>
+<!-- <property name="cylinder_length" value="0.0297"/> -->
+
+<!-- <property name="container_x_offset" value="-0.03"/> -->
+<!-- <property name="daihen_boad_offset" value="0.13"/> -->
+<!-- <property name="container_short_side" value="0.46"/> -->
+
+<xacro:include filename="$(find fcsc_description)/model/materials.urdf.xacro" />
+<xacro:include filename="$(find fcsc_description)/model/fcsc_gazebo.xacro" />
+<xacro:include filename="$(find fcsc_description)/model/container.urdf.xacro" />
+<xacro:include filename="$(find fcsc_description)/model/create_box.xacro" />
+<xacro:include filename="$(find fcsc_description)/model/my_ezgripper_dual_gen2.urdf.xacro"/>
+<xacro:include filename="$(find ur_description)/urdf/ur5.urdf.xacro" />
+<xacro:include filename="$(find fcsc_description)/model/robot.urdf.xacro" />
+
+<!-- <xacro:create_box name="plane" mass="1000" x="50" y="50" z="0.001" visual="false">
+  <origin xyz="0 0 0.0005" rpy="0 0 0" />
+</xacro:create_box>
+<joint name="plane_fixed" type="fixed">
+  <parent link="base_footprint"/>
+  <child link="plane"/>
+  <origin xyz="0 0 0" rpy="0 0 0"/>
+</joint>
+<gazebo reference="plane">
+  <selfCollide>false</selfCollide>
+</gazebo> -->
+
+<!-- <link name="map"/>
+<joint name="map_to_base_footprint" type="fixed">
+  <parent link="map"/>
+  <child link="base_footprint"/>
+</joint> -->
+
+<!-- arm -->
+<xacro:if value="$(arg naname_ur5)">
+  <xacro:ur5_robot
+    prefix=""
+    joint_limited="true"
+    elbow_joint_lower_limit="${0}" elbow_joint_upper_limit="${pi}"
+    wrist_1_lower_limit="0" wrist_1_upper_limit="${2*pi}"
+    />
+</xacro:if>
+<xacro:if value="$(arg maue_ur5)">
+  <xacro:ur5_robot
+    prefix=""
+    joint_limited="true"
+    elbow_joint_lower_limit="0" elbow_joint_upper_limit="${pi}"
+    wrist_1_lower_limit="${-2*pi}" wrist_1_upper_limit="${0}"
+    />
+</xacro:if>
+
+<link name="gripper_link"/>
+<link name="gripper_wrap_link"/>
+
+<!-- ezgripper dual * 2 -->
+<ezgripper_dual prefix="top" parent_link="camera_attachment_1_link" mimic="false" parent_prefix="top">
+  <!-- <origin xyz="${0.01} 0 ${0.065/2}" rpy="0 0 0"/> -->
+  <origin xyz="${0.01 + cylinder_length} 0 ${0.065/2}" rpy="0 0 0"/>
+</ezgripper_dual>
+<ezgripper_dual prefix="bottom" parent_link="camera_attachment_1_link"  mimic="false" parent_prefix="bottom">
+  <!-- <origin xyz="${0.01} 0 ${-0.065/2}" rpy="0 0 0"/> -->
+  <origin xyz="${0.01+ cylinder_length} 0 ${-0.065/2}" rpy="0 0 0"/>
+</ezgripper_dual>
+<joint name="gripper_link_joint" type="fixed">
+  <parent link="top_ezgripper_palm_link"/>
+  <child link="gripper_link"/>
+  <origin xyz="0.178 0 ${-0.065/2}" rpy="0 0 0"/>
+</joint>
+<joint name="gripper_wrap_joint" type="fixed">
+  <parent link="top_ezgripper_palm_link"/>
+  <child link="gripper_wrap_link"/>
+  <origin xyz="0.085 0 ${-0.065/2}" rpy="0 0 0"/>
+</joint>
+
+<!-- <link name="cylinder">
+  <visual>
+    <origin xyz="0 0 0" rpy="0 0 0" />
+    <geometry>
+      <cylinder length="${cylinder_length}" radius="0.03" />
+    </geometry>
+    <material name="DarkGray" />
+  </visual>
+  <collision>
+    <origin xyz="0 0 0" rpy="0 0 0" />
+    <geometry>
+      <cylinder length="0.01" radius="0.01" />
+    </geometry>
+  </collision>
+  <inertial>
+    <mass value="0.01" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
+    <inertia  ixx="0.0001" ixy = "0" ixz = "0"
+              iyy="0.0001" iyz = "0"
+              izz="0.0001" />
+  </inertial>
+</link>
+<joint name="cylinder_joint" type="fixed">
+  <parent link="camera_attachment_1_link"/>
+  <child link="cylinder"/>
+  <origin xyz="${cylinder_length/2+0.01} 0 0" rpy="0 ${M_PI/2} 0"/>
+</joint> -->
+
+<!-- <xacro:use_RealSenseSR300_ur5 attachment_depth="0.01" attachment_width="0.07" attachment_height="0.1125"/> -->
+
+<xacro:use_RealSenseD435_ur5 attachment_depth="0.01" attachment_width="0.07" attachment_height="${0.1125+0.025}"/>
+
+<joint name="arm_to_kinect" type="fixed">
+  <parent link="ee_link"/>
+  <child link="camera_attachment_1_link"/>
+  <origin xyz="0 0 0" rpy="0 0 0"/>
+</joint>
+
+<joint name="ur5_base" type="fixed">
+  <parent link="boad"/>
+  <child link="base_link"/>
+  <!-- NANAME -->
+  <xacro:if value="$(arg naname_ur5)">
+    <origin rpy="${-M_PI/4} 0 ${-M_PI/2}" xyz="${0.37556} ${-0.11} ${daihen_boad_offset-0.027279+0.005}"/>
+  </xacro:if>
+
+  <!-- MAUE -->
+  <!-- Daihe Mobile Robot -->
+  <!-- <xacro:if value="$(arg maue_ur5)">
+  <origin rpy="0 0 0" xyz="${0.54/2 - ur5_base_radius} ${0.54/2 - ur5_base_radius} ${daihen_boad_offset}"/>
+</xacro:if> -->
+
+  <!-- KDEL(F507) Demo -->
+  <xacro:if value="$(arg maue_ur5)">
+    <origin rpy="0 0 ${M_PI}" xyz="${0.7/2-0.24} 0 ${daihen_boad_offset+0.05}"/>
+  </xacro:if>
+
+  <!-- MAYOKO -->
+  <xacro:if value="$(arg mayoko_ur5)">
+    <origin rpy="${-M_PI/2} 0 ${-M_PI/2}" xyz="${0.27} ${-ur5_base_radius} ${daihen_boad_offset + ur5_base_radius}"/>
+  </xacro:if>
+
+</joint>
+
+<!-- KDEL(F507) Demo Table -->
+<xacro:if value="$(arg maue_ur5)">
+  <xacro:create_box name="control_box" mass="15" x="0.7" y="0.65" z="0.69">
+    <origin xyz="0 0 ${-0.69/2}" rpy="0 0 0" />
+  </xacro:create_box>
+  <joint name="table_fixed" type="fixed">
+    <parent link="boad"/>
+    <child link="control_box"/>
+    <origin rpy="0 0 0" xyz="0 0 ${daihen_boad_offset+0.05}"/>
+  </joint>
+</xacro:if>
+
+<!-- control box -->
+<!-- 0.395
+0.165
+0.2 -->
+<xacro:create_box name="control_box" mass="15" x="0.395" y="0.2" z="0.2">
+  <origin xyz="0 0 ${0.2/2}" rpy="0 0 0" />
+</xacro:create_box>
+<joint name="control_box_fixed" type="fixed">
+  <parent link="container"/>
+  <child link="control_box"/>
+  <origin rpy="0 ${M_PI/2} 0" xyz="${-0.2-0.2-0.02} ${-0.3+0.2/2} 0.03"/>
+</joint>
+<!-- <origin rpy="0 0 0" xyz="0 ${0.165/2} ${daihen_boad_offset}"/> -->
+
+<xacro:unless value="$(arg maue_ur5)">
+  <xacro:container/>
+  <joint name="container_base" type="revolute">
+    <parent link="boad"/>
+    <child link="container"/>
+    <xacro:if value="$(arg naname_ur5)">
+      <origin rpy="0 0 0" xyz="${0.54/2-container_short_side/2-0.043+0.005+0.006} ${-0.073+0.005} ${daihen_boad_offset+container_z_offset+0.008}"/>
+    </xacro:if>
+    <xacro:if value="$(arg maue_ur5)">
+      <origin rpy="0 0 0" xyz="${-container_short_side/2} 0 ${daihen_boad_offset+container_z_offset}"/>
+    </xacro:if>
+    <axis xyz="0 0 1" />
+    <!-- <origin rpy="0 0 ${M_PI/2}" xyz="${-0.25} ${container_short_side/2} ${daihen_boad_offset+0.2}"/> -->
+    <limit lower="0" upper="0" effort="0" velocity="0"/>
+    <dynamics friction="100000000000000000"/>
+  </joint>
+  <transmission name="container_base_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="container_base">
+      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="container_base_motor">
+      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+</xacro:unless>
+
+<gazebo>
+  <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so"/>
+</gazebo>
+
+</robot>

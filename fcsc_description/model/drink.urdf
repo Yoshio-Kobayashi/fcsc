@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<robot name="drink">
+  <link name="drink">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="0.3"/>
+      <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+    </inertial>
+    <collision>
+      <origin xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://fcsc_description/mesh/drink.stl" scale="1 1 1"/>
+      </geometry>
+    </collision>
+    <visual>
+      <origin xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="package://fcsc_description/mesh/drink.stl" scale="1 1 1"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <link name="ar_marker">
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="0.00000001"/>
+      <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+    </inertial>
+    <collision>
+      <origin xyz="0 0 0"/>
+      <geometry>
+        <box size="0.01 0.01 0.0001"/>
+      </geometry>
+    </collision>
+    <visual>
+      <origin xyz="0 0 0"/>
+      <geometry>
+        <box size="0.01 0.01 0.0001"/>
+      </geometry>
+      <material name="ar_marker_0">
+        <texture filename="package://fcsc_description/image/MarkerData_0.png"/>
+      </material>
+    </visual>
+  </link>
+  <gazebo reference="ar_marker">
+    <material>ar_marker_0</material>
+  </gazebo>
+  
+  
+  <joint name="ar" type="fixed">
+    <parent link="drink"/>
+    <child link="ar_marker"/>
+    <origin xyz="0 0 0.109" rpy="0 0 0"/>
+  </joint>
+
+</robot>
+
+

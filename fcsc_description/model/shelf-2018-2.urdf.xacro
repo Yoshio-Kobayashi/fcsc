@@ -1,0 +1,170 @@
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="shelf">
+	<xacro:include filename="$(find fcsc_description)/model/create_box.xacro"/>
+
+	<!-- shelf config -->
+	<xacro:arg name="width" default="0.9"/>
+	<xacro:arg name="depth" default="0.435"/>
+	<xacro:arg name="board_1_height" default="0.52"/>
+	<xacro:arg name="board_2_height" default="0.72"/>
+	<xacro:arg name="board_3_height" default="1.5"/>
+	<xacro:arg name="stopper_height" default="0.035"/>
+	<xacro:arg name="thickness" default="0.01"/>
+	<xacro:arg name="height" default="1.5"/>
+
+	<xacro:arg name="marker_size" default="5"/>
+  <xacro:arg name="marker_id" default="90"/>
+
+  <property name="marker_size_p" value="${$(arg marker_size) * 0.01}"/>
+  <property name="marker_id_p" value="$(arg marker_id)"/>
+
+	<xacro:macro name="box_inertial" params="mass x y z *origin">
+		<inertial>
+			<mass value="${mass}" />
+			<xacro:insert_block name="origin" />
+			<inertia  ixx="${mass*(y*y+z*z)/12}" ixy = "0" ixz = "0"
+								iyy="${mass*(x*x+z*z)/12}" iyz = "0"
+								izz="${mass*(x*x+y*y)/12}" />
+		</inertial>
+	</xacro:macro>
+
+	<!-- AR Marker -->
+	<xacro:macro name="ar_marker" params="ar_marker_id ar_marker_size parent *origin">
+		<link name="ar_marker_${ar_marker_id}">
+			<xacro:box_inertial mass="0.0000001" x="${ar_marker_size}" y="${ar_marker_size}" z="0.0001">
+				<origin xyz="0 0 0" rpy="0 0 1.57" />
+			</xacro:box_inertial>
+			<collision>
+				<origin xyz="0 0 0" rpy="0 0 1.57"/>
+				<geometry>
+					<box size="${ar_marker_size} ${ar_marker_size} 0.0001"/>
+				</geometry>
+			</collision>
+			<visual>
+				<origin xyz="0 0 0" rpy="0 0 1.57"/>
+				<geometry>
+					<box size="${ar_marker_size} ${ar_marker_size} 0.0001"/>
+				</geometry>
+				<material name="ar_marker_${ar_marker_id}">
+					<texture filename="package://fcsc_description/media/materials/textures/MarkerData_${ar_marker_id}.png"/>
+				</material>
+			</visual>
+		</link>
+		<gazebo reference="ar_marker_${ar_marker_id}">
+			<material>ar_marker_${ar_marker_id}</material>
+		</gazebo>
+		<joint name="ar_joint_${ar_marker_id}" type="fixed">
+			<parent link="${parent}"/>
+			<child link="ar_marker_${ar_marker_id}"/>
+			<xacro:insert_block name="origin" />
+		</joint>
+	</xacro:macro>
+
+	<xacro:macro name="shelf">
+
+		<link name="world"/>
+
+		<!-- tanaita ground -->
+		<xacro:create_box name="shelf_base" mass="5" x="$(arg depth)" y="$(arg width)" z="$(arg thickness)">
+			<origin xyz="0 0 ${$(arg thickness) / 2.0}" rpy="0 0 0"/>
+		</xacro:create_box>
+
+		<xacro:create_box name="tanaita_side_R" mass="5" x="$(arg depth)" y="$(arg thickness)" z="$(arg height)">
+			<origin xyz="0 0 ${$(arg height) / 2.0}" rpy="0 0 0"/>
+		</xacro:create_box>
+
+		<xacro:create_box name="tanaita_side_L" mass="5" x="$(arg depth)" y="$(arg thickness)" z="$(arg height)">
+			<origin xyz="0 0 ${$(arg height) / 2.0}" rpy="0 0 0"/>
+		</xacro:create_box>
+
+		<xacro:create_box name="tanaita_oku" mass="5" x="$(arg thickness)" y="$(arg width)" z="$(arg height)">
+			<origin xyz="0 0 ${$(arg height) / 2.0}" rpy="0 0 0"/>
+		</xacro:create_box>
+
+		<!-- shelf board link -->
+		<xacro:create_box name="shelf_board_1" mass="5" x="$(arg depth)" y="$(arg width)" z="$(arg thickness)">
+			<origin xyz="0 0 ${$(arg thickness) / 2.0}" rpy="0 0 0"/>
+		</xacro:create_box>
+		<xacro:create_box name="shelf_board_2" mass="5" x="$(arg depth)" y="$(arg width)" z="$(arg thickness)">
+			<origin xyz="0 0 ${$(arg thickness) / 2.0}" rpy="0 0 0"/>
+		</xacro:create_box>
+		<xacro:create_box name="shelf_board_3" mass="5" x="$(arg depth)" y="$(arg width)" z="$(arg thickness)">
+			<origin xyz="0 0 ${$(arg thickness) / 2.0}" rpy="0 0 0"/>
+		</xacro:create_box>
+
+		<!-- stopper link -->
+		<xacro:create_box name="stopper_1" mass="5" x="$(arg thickness)" y="$(arg width)" z="$(arg stopper_height)">
+			<origin xyz="0 0 ${$(arg stopper_height) / 2.0}" rpy="0 0 0"/>
+		</xacro:create_box>
+		<xacro:create_box name="stopper_2" mass="5" x="$(arg thickness)" y="$(arg width)" z="$(arg stopper_height)">
+			<origin xyz="0 0 ${$(arg stopper_height) / 2.0}" rpy="0 0 0"/>
+		</xacro:create_box>
+		<xacro:create_box name="stopper_3" mass="5" x="$(arg thickness)" y="$(arg width)" z="$(arg stopper_height)">
+			<origin xyz="0 0 ${$(arg stopper_height) / 2.0}" rpy="0 0 0"/>
+		</xacro:create_box>
+
+		<joint name="world_fixed" type="fixed">
+			<parent link="world"/>
+			<child link="shelf_base"/>
+			<origin xyz="0 0 0"/>
+		</joint>
+
+		<!-- board joint  -->
+		<joint name="board_1_joint" type="fixed">
+			<parent link="shelf_base"/>
+			<child link="shelf_board_1"/>
+			<origin xyz="0 0 $(arg board_1_height)" rpy="0 0 0"/>
+		</joint>
+		<joint name="board_2_joint" type="fixed">
+			<parent link="shelf_base"/>
+			<child link="shelf_board_2"/>
+			<origin xyz="0 0 $(arg board_2_height)" rpy="0 0 0"/>
+		</joint>
+		<joint name="board_3_joint" type="fixed">
+			<parent link="shelf_base"/>
+			<child link="shelf_board_3"/>
+			<origin xyz="0 0 $(arg board_3_height)" rpy="0 0 0"/>
+		</joint>
+
+		<!-- sopper joint -->
+		<joint name="stopper_1_joint" type="fixed">
+			<parent link="shelf_base"/>
+			<child link="stopper_1"/>
+			<origin xyz="${-$(arg depth)/2+$(arg thickness)/2} 0 $(arg board_1_height)" rpy="0 0 0"/>
+		</joint>
+		<joint name="stopper_2_joint" type="fixed">
+			<parent link="shelf_base"/>
+			<child link="stopper_2"/>
+			<origin xyz="${-$(arg depth)/2+$(arg thickness)/2} 0 $(arg board_2_height)" rpy="0 0 0"/>
+		</joint>
+		<joint name="stopper_3_joint" type="fixed">
+			<parent link="shelf_base"/>
+			<child link="stopper_3"/>
+			<origin xyz="${-$(arg depth)/2+$(arg thickness)/2} 0 $(arg board_3_height)" rpy="0 0 0"/>
+		</joint>
+
+		<joint name="side_R_joint" type="fixed">
+			<parent link="shelf_base"/>
+			<child link="tanaita_side_R"/>
+			<origin xyz="0 ${($(arg width)+$(arg thickness))/2} 0" rpy="0 0 0"/>
+		</joint>
+
+		<joint name="side_L_joint" type="fixed">
+			<parent link="shelf_base"/>
+			<child link="tanaita_side_L"/>
+			<origin xyz="0 ${-($(arg width)+$(arg thickness))/2} 0" rpy="0 0 0"/>
+		</joint>
+
+		<joint name="oku_joint" type="fixed">
+			<parent link="shelf_base"/>
+			<child link="tanaita_oku"/>
+			<origin xyz="${($(arg depth)+$(arg thickness))/2} 0 0" rpy="0 0 0"/>
+		</joint>
+
+		<!-- ar marker -->
+		<xacro:ar_marker ar_marker_id="${marker_id_p}" ar_marker_size="${marker_size_p}" parent="shelf_board_2">
+			<origin xyz="${-$(arg depth) / 2.0 - 0.001} 0 ${-marker_size_p / 2.0 + $(arg stopper_height)}" rpy="1.57 0 -1.57"/>
+		</xacro:ar_marker>
+
+	</xacro:macro>
+	<xacro:shelf/>
+</robot>

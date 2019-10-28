@@ -1,0 +1,151 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="onigiri">
+  <xacro:arg name="use_ar_marker" default="true"/>
+  <xacro:arg name="marker_id" default="0"/>
+  <xacro:macro name="box_inertial" params="mass x y z *origin">
+    <inertial>
+      <mass value="${mass}" />
+      <xacro:insert_block name="origin" />
+      <inertia  ixx="${mass*(y*y+z*z)/12}" ixy = "0" ixz = "0"
+                iyy="${mass*(x*x+z*z)/12}" iyz = "0"
+                izz="${mass*(x*x+y*y)/12}" />
+    </inertial>
+  </xacro:macro>
+  <xacro:macro name="create_box" params="name *origin *box mass">
+    <link name="${name}">
+      <inertial>
+      <xacro:insert_block name="origin"/>
+      <mass value="${mass}"/>
+        <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+      </inertial>
+      <collision>
+        <xacro:insert_block name="origin"/>
+        <geometry>
+          <xacro:insert_block name="box"/>
+        </geometry>
+      </collision>
+      <visual>
+        <xacro:insert_block name="origin"/>
+        <geometry>
+           <xacro:insert_block name="box"/>
+        </geometry>
+      </visual>
+    </link>
+  </xacro:macro>
+  <xacro:macro name="onigiri">
+    <link name="onigiri">
+      <xacro:box_inertial mass="0.1" x="0.08" y="0.035" z="0.075" >
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </xacro:box_inertial>
+      <!-- <inertial>
+        <origin xyz="0 0 0"/>
+        <mass value="0.1"/>
+        <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+        <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+      </inertial> -->
+      <collision>
+        <origin xyz="0 0 0"/>
+        <geometry>
+          <mesh filename="package://fcsc_description/mesh/onigiri_edit.stl" scale="1 1 1"/>
+        </geometry>
+      </collision>
+      <visual>
+        <origin xyz="0 0 0"/>
+        <geometry>
+          <mesh filename="package://fcsc_description/mesh/onigiri_edit.stl" scale="1 1 1"/>
+        </geometry>
+      </visual>
+    </link>
+    <gazebo reference="onigiri">
+      <!-- <mu1 value="100" />
+      <mu2 value="100" />
+      <kp value="8166"/>
+      <kd value="4083"/> -->
+      <mu1 value="100000000000000000" />
+      <mu2 value="100000000000000000" />
+      <kp value="1000000"/>
+      <kd value="1.0"/>
+      <minDepth value="0.01"/>
+      <maxContacts>1000</maxContacts>
+    </gazebo>
+
+    <xacro:if value="$(arg use_ar_marker)">
+      <link name="ar_marker">
+        <xacro:box_inertial mass="0.0000001" x="0.02" y="0.02" z="0.0001">
+          <origin xyz="0 0 0" rpy="0 0 1.5707" />
+        </xacro:box_inertial>
+        <!-- <inertial>
+          <origin xyz="0 0 0"/>
+          <mass value="10"/>
+          <mass value="0.00000001"/>
+          <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+          <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+        </inertial> -->
+        <collision>
+          <origin xyz="0 0 0" rpy="0 0 1.5707"/>
+          <geometry>
+            <!-- <box size="0.03 0.1 0.03"/> -->
+            <box size="0.02 0.02 0.0001"/>
+          </geometry>
+        </collision>
+        <visual>
+          <origin xyz="0 0 0" rpy="0 0 1.5707"/>
+          <geometry>
+            <!-- <box size="0.02 0.1 0.02"/> -->
+            <box size="0.02 0.02 0.0001"/>
+          </geometry>
+          <material name="ar_marker_0">
+            <texture filename="package://fcsc_description/image/MarkerData_0.png"/>
+          </material>
+        </visual>
+      </link>
+      <gazebo reference="ar_marker">
+        <!-- <material>ar_marker_0</material> -->
+        <material>ar_marker_$(arg marker_id)</material>
+      </gazebo>
+      <joint name="ar" type="fixed">
+        <parent link="onigiri"/>
+        <child link="ar_marker"/>
+        <!-- <origin xyz="0 -0.0175 0.04" rpy="0 0 0"/> -->
+        <!-- <origin xyz="0 -0.0175 0.0375" rpy="0 0 0"/> -->
+        <origin xyz="0 -0.0175 0" rpy="1.5707 0 0"/>
+        <!-- <axis xyz="0 1 0"/> -->
+        <!-- <limit effort="0" velocity="0" lower="0" upper="0" /> -->
+      </joint>
+    </xacro:if>
+    <xacro:create_box name="film_top" mass="0.00001">
+    	<origin xyz="0 0 0.005" rpy="0 0 0"/>
+    	<box size="0.0005 0.035 0.01"/>
+    </xacro:create_box>
+    <joint name="film_joint_1" type="revolute">
+    	<parent link="onigiri"/>
+    	<child link="film_top"/>
+    	<axis xyz="0 1 0"/>
+    	<origin xyz="0 0 ${0.075*2/3}" rpy="0 0 0" />
+    	<limit upper="0.5235" lower="-0.5235" effort="0" velocity="0"/>
+    </joint>
+    <xacro:create_box name="film_side_1" mass="0.00001">
+    	<origin xyz="0.005 0 0" rpy="0 0 0"/>
+    	<box size="0.01 0.035 0.0005"/>
+    </xacro:create_box>
+    <joint name="film_joint_2" type="revolute">
+    	<parent link="onigiri"/>
+    	<child link="film_side_1"/>
+    	<axis xyz="0 1 0"/>
+    	<origin xyz="0.04 0 ${-0.075/3}" rpy="0 0 0" />
+    	<limit upper="0.5235" lower="-0.5235" effort="0" velocity="0"/>
+    </joint>
+    <xacro:create_box name="film_side_2" mass="0.00001">
+    	<origin xyz="-0.005 0 0" rpy="0 0 0"/>
+    	<box size="0.01 0.035 0.0005"/>
+    </xacro:create_box>
+    <joint name="film_joint_3" type="revolute">
+    	<parent link="onigiri"/>
+    	<child link="film_side_2"/>
+    	<axis xyz="0 1 0"/>
+    	<origin xyz="-0.04 0 ${-0.075/3}" rpy="0 0 0" />
+    	<limit upper="0.5235" lower="-0.5235" effort="0" velocity="0"/>
+    </joint>
+  </xacro:macro>
+  <xacro:onigiri/>
+</robot>
