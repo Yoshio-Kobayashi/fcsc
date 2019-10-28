@@ -1,0 +1,199 @@
+<?xml version="1.0"?>
+<robot name="robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <!-- Included URDF/XACRO Files -->
+    <!-- <xacro:include filename="$(find robot_description)/urdf/materials.urdf.xacro" /> -->
+
+    <!-- PROPERTY LIST -->
+    <!--All units in m-kg-s-radians unit system -->
+    <xacro:property name="M_PI" value="3.1415926535897931" />
+
+    <!-- Main Body-base -->
+    <xacro:property name="base_r_size" value="0.77" />
+    <xacro:property name="base_h_size" value="0.64" />
+    <xacro:property name="base_body_mass" value="300" /> <!-- in kg -->
+
+    <!--Inertial macros for the box and cylinder. Units are kg*m^2-->
+  <xacro:macro name="cylinder_inertia" params="m r h">
+    <inertia  ixx="${m*(3*r*r+h*h)/12}" ixy = "0" ixz = "0"
+              iyy="${m*(3*r*r+h*h)/12}" iyz = "0"
+              izz="${m*r*r/2}" />
+  </xacro:macro>
+
+    <!-- BASE-FOOTPRINT -->
+    <!-- base_footprint is a fictitious link(frame) that is on the ground right below base_body origin -->
+    <link name="base_footprint">
+        <!-- <inertial>
+        <mass value="0.0001" />
+        <origin xyz="0 0 0" />
+        <inertia ixx="0.0001" ixy="0.0" ixz="0.0"
+            iyy="0.0001" iyz="0.0"
+            izz="0.0001" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <box size="0.001 0.001 0.001" />
+            </geometry>
+        </visual> -->
+    </link>
+    <gazebo reference="base_footprint">
+        <turnGravityOff>false</turnGravityOff>
+    </gazebo>
+    <!-- BASE-LINK -->
+    <joint name="base_footprint_joint" type="fixed">
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <parent link="base_footprint"/>
+        <child link="base_body" />
+    </joint>
+    <link name="base_body">
+        <visual>
+            <origin rpy="${M_PI/2} 0 0" xyz="0 0 0.03"/>
+            <geometry>
+                <mesh filename="package://robot_description/meshes/row_robot.stl"/>
+            </geometry>
+            <material name="Gray"/>
+        </visual>
+        <collision>
+            <origin rpy="0 0 0" xyz="0 0 ${base_h_size/2}"/>
+            <geometry>
+              <cylinder length="${base_h_size}" radius="${base_r_size/2}" />
+            </geometry>
+            <!-- <geometry>
+                <mesh filename="package://robot_description/meshes/robot.stl"/>
+            </geometry> -->
+        </collision>
+        <inertial>
+            <mass value="${base_body_mass}"/>
+            <origin xyz="0.0 0.0 ${0}" rpy="0 0 0" />
+            <!-- <origin xyz="0.0 0.0 ${base_h_size/2}" rpy="0 0 0" /> -->
+            <!--The 3x3 rotational inertia matrix. -->
+            <cylinder_inertia  m="${base_body_mass}" r="${base_r_size/2}" h="${base_h_size}"/>
+        </inertial>
+    </link>
+    <gazebo reference="base_body">
+        <material>Gazebo/Gray</material>
+        <turnGravityOff>false</turnGravityOff>
+        <!-- <selfCollide>false</selfCollide> -->
+    </gazebo>
+
+    <!-- BOAD -->
+    <joint name="boad_joint" type="prismatic">
+        <origin xyz="0.0 0.0 0.39" rpy="0.0 0.0 0.0"/>
+        <parent link="base_body"/>
+        <child link="boad"/>
+        <axis xyz="0.0 0.0 1.0"/>
+        <limit effort="1000.0" lower="0.0" upper="0.10" velocity="0.5"/>
+    </joint>
+    <link name="boad">
+        <visual>
+            <origin rpy="${M_PI/2} 0.0 0.0" xyz="0.0 0.0 0.0"/>
+            <geometry>
+                <mesh filename="package://robot_description/meshes/boad.stl"/>
+            </geometry>>
+            <material name="Gray"/>
+        </visual>
+        <collision>
+            <origin rpy="${M_PI/2} 0.0 0.0" xyz="0.0 0.0 0.0"/>
+            <geometry>
+                <mesh filename="package://robot_description/meshes/boad.stl"/>
+            </geometry>
+        </collision>
+        <inertial>
+            <mass value="50" />
+            <origin xyz="0.0 0.0 0" rpy="${M_PI/2} 0 0"/>
+            <cylinder_inertia  m="50" r="0.4" h="0.25"/>
+            <!-- <mass value="1e-5" />
+            <origin xyz="0 0 -0.01" rpy="0 0 0"/>
+            <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" /> -->
+        </inertial>
+    </link>
+    <transmission name="board_joint_trans">
+        <type>transmission_interface/SimpleTransmission</type>
+        <joint name="boad_joint">
+            <hardwareInterface>PositionJointInterface</hardwareInterface>
+        </joint>
+        <actuator name="boad_joint_motor">
+            <hardwareInterface>PositionJointInterface</hardwareInterface>
+            <mechanicalReduction>1</mechanicalReduction>
+        </actuator>
+    </transmission>
+    <gazebo reference="boad">
+        <material>Gazebo/Gray</material>
+        <turnGravityOff>false</turnGravityOff>
+        <!-- <selfCollide>false</selfCollide> -->
+    </gazebo>
+
+
+    <!-- SENSOR -->
+    <joint name="hokuyo_joint" type="fixed">
+        <origin xyz="0.339 0 0.36" rpy="0 0 0"/>
+        <parent link="base_body"/>
+        <child link="base_scan"/>
+    </joint>
+    <link name="base_scan">
+        <collision>
+            <origin xyz="0 0 -0.01" rpy="0 0 0"/>
+            <geometry>
+                <box size="0.01 0.01 0.01"/>
+            </geometry>
+        </collision>
+        <visual>
+            <origin xyz="0 0 -0.01" rpy="0 0 0"/>
+            <geometry>
+                <box size="0.01 0.01 0.01"/>
+            </geometry>
+            <material name="White"/>
+        </visual>
+        <inertial>
+            <mass value="1e-5" />
+            <origin xyz="0 0 -0.01" rpy="0 0 0"/>
+            <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+        </inertial>
+    </link>
+    <gazebo reference="base_scan">
+        <sensor type="ray" name="head_hokuyo_sensor">
+            <pose>0 0 0 0 0 0</pose>
+            <visualize>true</visualize>
+            <update_rate>40</update_rate>
+            <ray>
+                <scan>
+                <horizontal>
+                    <samples>720</samples>
+                    <resolution>1</resolution>
+                    <min_angle>-0.78539816339</min_angle>
+                    <max_angle>0.78539816339</max_angle>
+                </horizontal>
+                </scan>
+                <range>
+                <min>0.50</min>
+                <max>30.0</max>
+                <resolution>0.01</resolution>
+                </range>
+                <noise>
+                    <type>gaussian</type>
+                    <mean>0.0</mean>
+                    <stddev>0.01</stddev>
+                </noise>
+            </ray>
+            <plugin name="gazebo_ros_head_hokuyo_controller" filename="libgazebo_ros_laser.so">
+                <alwaysOn>true</alwaysOn>
+                <topicName>/laser_scan</topicName>
+                <frameName>/base_scan</frameName>
+            </plugin>
+        </sensor>
+    </gazebo>
+
+    <gazebo>
+        <plugin name="object_controller" filename="libgazebo_ros_planar_move.so">
+            <commandTopic>cmd_vel</commandTopic>
+            <odometryTopic>odom</odometryTopic>
+            <odometryFrame>odom</odometryFrame>
+            <odometryRate>20.0</odometryRate>
+            <robotBaseFrame>base_footprint</robotBaseFrame>
+        </plugin>
+        <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so"/>
+    </gazebo>
+
+
+</robot>

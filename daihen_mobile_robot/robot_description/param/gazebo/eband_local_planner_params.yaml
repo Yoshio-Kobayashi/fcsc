@@ -1,0 +1,75 @@
+EBandPlannerROS:
+
+## 共通パラメータ ##
+ xy_goal_tolerance: 0.1 #目標ポーズに到達するための距離許容差
+
+ yaw_goal_tolerance: 0.05 #所望の目標ポーズに到達するための方向許容差
+
+ rot_stopped_vel: 0.01 #制限サイクルまたはロックを回避するためにロボットを停止する必要があるかどうかを決定する角速度下限
+
+ trans_stopped_vel: 0.01 #制限サイクルまたはロックを回避するためにロボットを停止する必要があるかどうかを決定する線速度下限
+
+
+## 視覚化パラメータ ##
+ marker_lifetime: 0.5 #eバンド視覚化マーカーの寿命
+
+## 弾性バンドのパラメータ ##
+ eband_min_relative_overlap: 0.7 #連続するバブル間の接続性を示す最小距離
+
+ eband_tiny_bubble_distance: 0.01 #小さな気泡距離に関する気泡の幾何学的境界
+
+ eband_tiny_bubble_expansion: 0.01 #小さな気泡膨張に関する気泡の幾何学的境界
+
+ eband_internal_force_gain: 1.0 #弾性バンドを引き伸ばす傾向がある連続気泡間の力の強制的な増加
+
+ eband_external_force_gain: 2.0 #泡を障害物から遠ざける傾向のある力を強める
+
+ num_iterations_eband_optimization: 3 #eバンド最適化の反復回数
+
+ eband_equilibrium_approx_max_recursion_depth: 4 #内力と外力の平衡に達するための反復数
+
+ eband_equilibrium_relative_overshoot: 0.75 #最大相対平衡オーバーシュート
+
+ eband_significant_force_lower_bound: 0.15 #有意であり、計算に使用される力の最小値
+
+ costmap_weight: 10.0 #障害物までの距離計算に使用されるコストマップ重み係数
+
+## 軌道コントローラのパラメータ ##
+ max_vel_lin: 0.2 #最大線速度
+ # max_vel_lin: 0.75 #最大線速度
+
+ max_vel_th: 0.5 #最大角速度
+ # max_vel_th: 1.0 #最大角速度
+
+ min_vel_lin: -0.2 #最小線速度
+ # min_vel_lin: -0.75 #最小線速度
+
+ min_vel_th: 0.0 #最小角速度
+
+ min_in_place_vel_th: 0.0 #最小インプレース角速度
+
+ in_place_trans_vel: 0.0 #所定の最小線速度
+
+ k_prop: 4.0 #PIDコントローラの比例ゲイン
+
+ k_damp: 3.5 #PIDコントローラの減衰ゲイン
+
+ Ctrl_Rate: 10.0 #制御率
+
+ max_acceleration: 0.5 #最大許容加速度
+
+ virtual_mass: 0.75 #仮想質量
+
+ max_translational_acceleration: 0.5 #最大直線加速度
+
+ max_rotational_acceleration: 1.5 #最大角加速度
+
+ rotation_correction_threshold: 0.5 #回転補正閾値
+
+ differential_drive: False #差動駆動モードを使用するかどうかを示します
+
+ bubble_velocity_multiplier: 2.0 #気泡半径の乗数
+
+ rotation_threshold_multiplier: 1.0 #回転しきい値の乗数
+
+ disallow_hysteresis: False #許容値を超えた場合に目標に近づくかどうかを決定します。

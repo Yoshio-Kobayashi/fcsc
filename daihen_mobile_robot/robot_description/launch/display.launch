@@ -1,0 +1,40 @@
+<launch>
+    <arg name="model" default="$(find robot_description)/urdf/robot.urdf.xacro"/>
+    <arg name="gui" default="true" />
+    <!-- <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher"/> -->
+
+    <param name="robot_description" command="$(find xacro)/xacro '$(arg model)'"/>
+    <param name="use_gui" value="$(arg gui)"/>
+    
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find robot_description)/rviz/robot_display.rviz" />
+
+    <include file="$(find gazebo_ros)/launch/empty_world.launch">
+        <arg name="world_name" value="$(find robot_description)/worlds/flatroom.world"/>
+        <arg name="paused" value="false"/>
+        <arg name="use_sim_time" value="true"/>
+        <arg name="gui" value="true"/>
+        <arg name="headless" value="false"/>
+        <arg name="debug" value="false"/>
+    </include>
+
+    <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -x 0 -y 0 -z 0 -R 0 -P 0 -Y 0 -model robot" />
+
+    <!-- <rosparam file="$(find robot_description)/config/joint_position_control.yaml" command="load" />
+    <node name="boad_controller" pkg="controller_manager" type="spawner" output="screen" args="joint_state_controller" /> -->
+    <!-- publish all the frames to TF -->
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="state_publisher">
+      <param name="publish_frequency" value="20"/> <!-- Hz -->
+    </node>
+
+    <rosparam file="$(find robot_description)/controller/boad_joint_controller.yaml" command="load"/>
+    <node name="boad_joint_controller_spawner" pkg="controller_manager" type="controller_manager" args="spawn boad_joint_controller" respawn="false" output="screen"/>
+
+    <!-- joint_state_controller -->
+    <rosparam file="$(find robot_description)/controller/joint_state_controller.yaml" command="load"/>
+    <node name="joint_state_controller_spawner" pkg="controller_manager" type="controller_manager" args="spawn joint_state_controller" respawn="false" output="screen"/>
+
+    <node pkg="rostopic" type="rostopic" name="fake_joint_calibration" args="pub /calibrated std_msgs/Bool true" />
+
+
+
+</launch>
