@@ -1,0 +1,14 @@
+material ID_B
+{
+  technique
+  {
+    pass
+    {
+      texture_unit
+      {
+        texture ID_B.png
+        filtering trilinear
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+material ar_marker_120
+{
+  technique
+  {
+    pass
+    {
+      texture_unit
+      {
+        texture MarkerData_120.png
+        filtering trilinear
+      }
+    }
+  }
+}

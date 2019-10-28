@@ -1,0 +1,14 @@
+material ID_C
+{
+  technique
+  {
+    pass
+    {
+      texture_unit
+      {
+        texture ID_C.png
+        filtering trilinear
+      }
+    }
+  }
+}
