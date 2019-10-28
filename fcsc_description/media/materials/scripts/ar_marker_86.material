@@ -1,0 +1,14 @@
+material ar_marker_86
+{
+  technique
+  {
+    pass
+    {
+      texture_unit
+      {
+        texture MarkerData_86.png
+        filtering trilinear
+      }
+    }
+  }
+}
