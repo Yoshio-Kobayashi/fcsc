@@ -1,0 +1,8 @@
+<launch>
+
+<node pkg="comm_client" type="Comm_Simulation" name="Comm_Simulation" output="screen">
+    <remap from="/goal_pose" to="/move_base_simple/goal"/>
+    <remap from="/goal_lift" to="/boad_joint_controller/command"/>
+</node> 
+
+</launch>

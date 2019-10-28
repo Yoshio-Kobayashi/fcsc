@@ -1,0 +1,9 @@
+#request
+#geometry_msgs/Pose goal_pose
+geometry_msgs/Pose2D goal_pose
+std_msgs/Float64 height
+---
+#response
+geometry_msgs/Pose reached_pose
+#geometry_msgs/Pose2D reached_pose
+#std_msgs/Float64 height
