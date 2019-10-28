@@ -1,0 +1,4 @@
+float64[] start_state
+float64[] goal_state
+---
+trajectory_msgs/JointTrajectoryPoint[] trajectory_points

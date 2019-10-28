@@ -1,0 +1,7 @@
+<launch>
+  <node name="generate_trajectory_server" pkg="hierarchical_trajectory_database" type="generate_trajectory_server" output="screen">
+    <param name="trajectory_file_path" value="/home/kdel/workspace/ros/fcsc_ws/src/fcsc_pkgs/fcsc_moveit/data/trajectory/dataset_09/drink_filtered/"/>
+    <!-- <param name="trajectory_file_path" value="/home/kdel/workspace/ros/fcsc_ws/src/fcsc_pkgs/fcsc_moveit/data/trajectory/dataset_01/bento/"/>
+    <param name="trajectory_file_path" value="/home/kdel/workspace/ros/fcsc_ws/src/fcsc_pkgs/fcsc_moveit/data/trajectory/"/> -->
+  </node>
+</launch>
