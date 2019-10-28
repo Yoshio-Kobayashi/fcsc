@@ -1,0 +1,443 @@
+<?xml version="1.0" ?>
+<!--This does not replace URDF, and is not an extension of URDF.
+    This is a format for representing semantic information about the robot structure.
+    A URDF file must exist for this robot as well, where the joints and the links that are referenced are defined
+-->
+<robot name="daihen_ur5">
+    <!--GROUPS: Representation of a set of joints and links. This can be useful for specifying DOF to plan for, defining arms, end effectors, etc-->
+    <!--LINKS: When a link is specified, the parent joint of that link (if it exists) is automatically included-->
+    <!--JOINTS: When a joint is specified, the child link of that joint (which will always exist) is automatically included-->
+    <!--CHAINS: When a chain is specified, all the links along the chain (including endpoints) are included in the group. Additionally, all the joints that are parents to included links are also included. This means that joints along the chain and the parent joint of the base link are included in the group-->
+    <!--SUBGROUPS: Groups can also be formed by referencing to already defined group names-->
+    <group name="manipulator">
+        <chain base_link="base_link" tip_link="gripper_link" />
+    </group>
+    <group name="endeffector">
+        <joint name="top_ezgripper_knuckle_palm_L1_1" />
+        <joint name="bottom_ezgripper_knuckle_palm_L1_1" />
+    </group>
+    <group name="manipulator_wrap">
+        <chain base_link="base_link" tip_link="gripper_wrap_link" />
+    </group>
+    <group name="daisha">
+        <link name="base_body" />
+        <link name="boad" />
+        <joint name="boad_joint" />
+        <joint name="map_to_base_footprint" />
+    </group>
+    <group name="boad">
+        <link name="boad" />
+        <joint name="boad_joint" />
+    </group>
+    <group name="manipulator_with_elevator">
+        <chain base_link="base_body" tip_link="gripper_link" />
+    </group>
+    <group name="mobile_manipulator">
+        <link name="base_body" />
+        <link name="gripper_link" />
+        <link name="boad" />
+        <joint name="map_to_base_footprint" />
+        <joint name="boad_joint" />
+        <joint name="shoulder_pan_joint" />
+        <joint name="shoulder_lift_joint" />
+        <joint name="elbow_joint" />
+        <joint name="wrist_1_joint" />
+        <joint name="wrist_2_joint" />
+        <joint name="wrist_3_joint" />
+    </group>
+    <!--GROUP STATES: Purpose: Define a named state for a particular group, in terms of joint values. This is useful to define states like 'folded arms'-->
+    <group_state name="up" group="manipulator">
+        <joint name="elbow_joint" value="0" />
+        <joint name="shoulder_lift_joint" value="-1.5707" />
+        <joint name="shoulder_pan_joint" value="0" />
+        <joint name="wrist_1_joint" value="-1.5707" />
+        <joint name="wrist_2_joint" value="0" />
+        <joint name="wrist_3_joint" value="0" />
+    </group_state>
+    <group_state name="default" group="manipulator">
+        <joint name="elbow_joint" value="0" />
+        <joint name="shoulder_lift_joint" value="0" />
+        <joint name="shoulder_pan_joint" value="0" />
+        <joint name="wrist_1_joint" value="0" />
+        <joint name="wrist_2_joint" value="0" />
+        <joint name="wrist_3_joint" value="0" />
+    </group_state>
+    <group_state name="open" group="endeffector">
+        <joint name="bottom_ezgripper_knuckle_palm_L1_1" value="0" />
+        <joint name="top_ezgripper_knuckle_palm_L1_1" value="0" />
+    </group_state>
+    <group_state name="close" group="endeffector">
+        <joint name="bottom_ezgripper_knuckle_palm_L1_1" value="1.94" />
+        <joint name="top_ezgripper_knuckle_palm_L1_1" value="1.94" />
+    </group_state>
+    <group_state name="half_close" group="endeffector">
+        <joint name="bottom_ezgripper_knuckle_palm_L1_1" value="1.079" />
+        <joint name="top_ezgripper_knuckle_palm_L1_1" value="1.079" />
+    </group_state>
+    <group_state name="init" group="manipulator">
+        <joint name="elbow_joint" value="-2.74889" />
+        <joint name="shoulder_lift_joint" value="-0.1726" />
+        <joint name="shoulder_pan_joint" value="-3.1415" />
+        <joint name="wrist_1_joint" value="-0.3926" />
+        <joint name="wrist_2_joint" value="1.57079" />
+        <joint name="wrist_3_joint" value="0" />
+    </group_state>
+    <group_state name="container_center" group="manipulator">
+        <joint name="elbow_joint" value="1.08275" />
+        <joint name="shoulder_lift_joint" value="-0.773963" />
+        <joint name="shoulder_pan_joint" value="-1.86107" />
+        <joint name="wrist_1_joint" value="5.16754" />
+        <joint name="wrist_2_joint" value="-1.77474" />
+        <joint name="wrist_3_joint" value="-0.208179" />
+    </group_state>
+    <group_state name="daisha_up" group="daisha">
+        <joint name="boad_joint" value="0.095" />
+    </group_state>
+    <group_state name="daisha_down" group="daisha">
+        <joint name="boad_joint" value="0" />
+    </group_state>
+    <group_state name="boad_up" group="boad">
+        <joint name="boad_joint" value="0.09" />
+    </group_state>
+    <group_state name="boad_down" group="boad">
+        <joint name="boad_joint" value="0" />
+    </group_state>
+    <group_state name="naname" group="manipulator">
+        <joint name="elbow_joint" value="-2.5891" />
+        <joint name="shoulder_lift_joint" value="-0.1726" />
+        <joint name="shoulder_pan_joint" value="-1.57" />
+        <joint name="wrist_1_joint" value="-0.5524" />
+        <joint name="wrist_2_joint" value="1.57079" />
+        <joint name="wrist_3_joint" value="0" />
+    </group_state>
+    <group_state name="naname2" group="manipulator">
+        <joint name="elbow_joint" value="2.6927" />
+        <joint name="shoulder_lift_joint" value="-2.6927" />
+        <joint name="shoulder_pan_joint" value="1.57" />
+        <joint name="wrist_1_joint" value="3.2796" />
+        <joint name="wrist_2_joint" value="-1.57" />
+        <joint name="wrist_3_joint" value="0" />
+    </group_state>
+    <group_state name="naname3" group="manipulator">
+        <joint name="elbow_joint" value="2.779" />
+        <joint name="shoulder_lift_joint" value="-3.1415" />
+        <joint name="shoulder_pan_joint" value="1.57" />
+        <joint name="wrist_1_joint" value="3.2796" />
+        <joint name="wrist_2_joint" value="-1.57" />
+        <joint name="wrist_3_joint" value="0" />
+    </group_state>
+    <group_state name="mayoko5" group="manipulator">
+        <joint name="elbow_joint" value="2.82" />
+        <joint name="shoulder_lift_joint" value="-2.7618" />
+        <joint name="shoulder_pan_joint" value="1.57" />
+        <joint name="wrist_1_joint" value="2.313" />
+        <joint name="wrist_2_joint" value="-1.57" />
+        <joint name="wrist_3_joint" value="0" />
+    </group_state>
+    <group_state name="masita" group="manipulator">
+        <joint name="elbow_joint" value="-2.5891" />
+        <joint name="shoulder_lift_joint" value="-0.1726" />
+        <joint name="shoulder_pan_joint" value="-1.57" />
+        <joint name="wrist_1_joint" value="-1.1392" />
+        <joint name="wrist_2_joint" value="1.57079" />
+        <joint name="wrist_3_joint" value="0" />
+    </group_state>
+    <group_state name="mayoko" group="manipulator">
+        <joint name="elbow_joint" value="-2.5891" />
+        <joint name="shoulder_lift_joint" value="-0.1726" />
+        <joint name="shoulder_pan_joint" value="-1.57" />
+        <joint name="wrist_1_joint" value="0.3797" />
+        <joint name="wrist_2_joint" value="1.57079" />
+        <joint name="wrist_3_joint" value="0" />
+    </group_state>
+    <group_state name="home" group="manipulator">
+        <joint name="elbow_joint" value="-2.8308" />
+        <joint name="shoulder_lift_joint" value="-0.069" />
+        <joint name="shoulder_pan_joint" value="1.5535" />
+        <joint name="wrist_1_joint" value="-0.3926" />
+        <joint name="wrist_2_joint" value="1.57079" />
+        <joint name="wrist_3_joint" value="0" />
+    </group_state>
+    <group_state name="search_shelf" group="manipulator">
+        <joint name="elbow_joint" value="2.74696" />
+        <joint name="shoulder_lift_joint" value="-2.48976" />
+        <joint name="shoulder_pan_joint" value="1.53456" />
+        <joint name="wrist_1_joint" value="2.09861" />
+        <joint name="wrist_2_joint" value="-1.54511" />
+        <joint name="wrist_3_joint" value="0.0257033" />
+    </group_state>
+    <group_state name="mayoko2" group="manipulator">
+        <joint name="elbow_joint" value="2.6927" />
+        <joint name="shoulder_lift_joint" value="-2.6927" />
+        <joint name="shoulder_pan_joint" value="1.57" />
+        <joint name="wrist_1_joint" value="2.313" />
+        <joint name="wrist_2_joint" value="-1.57" />
+        <joint name="wrist_3_joint" value="0" />
+    </group_state>
+    <group_state name="mayoko3" group="manipulator">
+        <joint name="elbow_joint" value="2.05674" />
+        <joint name="shoulder_lift_joint" value="-2.92529" />
+        <joint name="shoulder_pan_joint" value="1.56331" />
+        <joint name="wrist_1_joint" value="3.23554" />
+        <joint name="wrist_2_joint" value="-1.66105" />
+        <joint name="wrist_3_joint" value="0.00687857" />
+    </group_state>
+    <group_state name="masita2" group="manipulator">
+        <joint name="elbow_joint" value="2.65715" />
+        <joint name="shoulder_lift_joint" value="-2.62449" />
+        <joint name="shoulder_pan_joint" value="1.58041" />
+        <joint name="wrist_1_joint" value="3.89435" />
+        <joint name="wrist_2_joint" value="-1.57748" />
+    </group_state>
+    <group_state name="masita3" group="manipulator">
+        <joint name="elbow_joint" value="1.81677" />
+        <joint name="shoulder_lift_joint" value="-2.9827" />
+        <joint name="shoulder_pan_joint" value="1.57141" />
+        <joint name="wrist_1_joint" value="5.03255" />
+        <joint name="wrist_2_joint" value="-1.5711" />
+        <joint name="wrist_3_joint" value="0.000876863" />
+    </group_state>
+    <group_state name="masita4" group="manipulator">
+        <joint name="elbow_joint" value="1.81677" />
+        <joint name="shoulder_lift_joint" value="-2.7827" />
+        <joint name="shoulder_pan_joint" value="1.57141" />
+        <joint name="wrist_1_joint" value="4.8324" />
+        <joint name="wrist_2_joint" value="-1.5711" />
+        <joint name="wrist_3_joint" value="0.000876863" />
+    </group_state>
+    <group_state name="naname4" group="manipulator">
+        <joint name="elbow_joint" value="2.0501" />
+        <joint name="shoulder_lift_joint" value="-2.93031" />
+        <joint name="shoulder_pan_joint" value="1.56336" />
+        <joint name="wrist_1_joint" value="3.75471" />
+        <joint name="wrist_2_joint" value="-1.57833" />
+        <joint name="wrist_3_joint" value="0.00633816" />
+    </group_state>
+    <group_state name="fold" group="manipulator">
+        <joint name="elbow_joint" value="2.7618" />
+        <joint name="shoulder_lift_joint" value="-2.7618" />
+        <joint name="shoulder_pan_joint" value="0.1726" />
+        <joint name="wrist_1_joint" value="3.1416" />
+        <joint name="wrist_2_joint" value="-1.57" />
+        <joint name="wrist_3_joint" value="0" />
+    </group_state>
+    <group_state name="onigiri_pose" group="manipulator">
+        <joint name="elbow_joint" value="2.6927" />
+        <joint name="shoulder_lift_joint" value="-2.6927" />
+        <joint name="shoulder_pan_joint" value="1.57" />
+        <joint name="wrist_1_joint" value="3.2796" />
+        <joint name="wrist_2_joint" value="0.1036" />
+        <joint name="wrist_3_joint" value="0" />
+    </group_state>
+    <group_state name="onigiri_pose_2" group="manipulator">
+        <joint name="elbow_joint" value="1.0702" />
+        <joint name="shoulder_lift_joint" value="-2.6927" />
+        <joint name="shoulder_pan_joint" value="1.57" />
+        <joint name="wrist_1_joint" value="3.2796" />
+        <joint name="wrist_2_joint" value="0.1036" />
+        <joint name="wrist_3_joint" value="0" />
+    </group_state>
+    <group_state name="onigiri_return_pose" group="manipulator">
+        <joint name="elbow_joint" value="1.55467" />
+        <joint name="shoulder_lift_joint" value="-2.79591" />
+        <joint name="shoulder_pan_joint" value="1.5685" />
+        <joint name="wrist_1_joint" value="2.51181" />
+        <joint name="wrist_2_joint" value="-1.5714" />
+        <joint name="wrist_3_joint" value="0.00228509" />
+    </group_state>
+    <group_state name="detect" group="manipulator">
+        <joint name="elbow_joint" value="0" />
+        <joint name="shoulder_lift_joint" value="-2.8653" />
+        <joint name="shoulder_pan_joint" value="1.57" />
+        <joint name="wrist_1_joint" value="5.5581" />
+        <joint name="wrist_2_joint" value="-1.4499" />
+        <joint name="wrist_3_joint" value="0" />
+    </group_state>
+    <group_state name="mayoko4" group="manipulator">
+        <joint name="elbow_joint" value="1.9067" />
+        <joint name="shoulder_lift_joint" value="-2.7752" />
+        <joint name="shoulder_pan_joint" value="1.56331" />
+        <joint name="wrist_1_joint" value="3.23554" />
+        <joint name="wrist_2_joint" value="-1.66105" />
+        <joint name="wrist_3_joint" value="0.00687857" />
+    </group_state>
+    <!--END EFFECTOR: Purpose: Represent information about an end effector.-->
+    <end_effector name="ee" parent_link="gripper_link" group="endeffector" />
+    <end_effector name="ee_wrap" parent_link="gripper_wrap_link" group="endeffector" />
+    <!--VIRTUAL JOINT: Purpose: this element defines a virtual joint between a robot link and an external frame of reference (considered fixed with respect to the robot)-->
+    <virtual_joint name="map_to_base_footprint" type="planar" parent_frame="map" child_link="base_footprint" />
+    <!--PASSIVE JOINT: Purpose: this element is used to mark joints that are not actuated-->
+    <passive_joint name="bottom_ezgripper_knuckle_L1_L2_1" />
+    <passive_joint name="bottom_ezgripper_knuckle_palm_L1_2" />
+    <passive_joint name="bottom_ezgripper_knuckle_L1_L2_2" />
+    <passive_joint name="top_ezgripper_knuckle_L1_L2_1" />
+    <passive_joint name="top_ezgripper_knuckle_palm_L1_2" />
+    <passive_joint name="top_ezgripper_knuckle_L1_L2_2" />
+    <passive_joint name="container_base" />
+    <!--DISABLE COLLISIONS: By default it is assumed that any link of the robot could potentially come into collision with any other link in the robot. This tag disables collision checking between a specified pair of links. -->
+    <disable_collisions link1="bottom_ezgripper_finger_L2_1" link2="bottom_ezgripper_finger_L2_2" reason="User" />
+    <disable_collisions link1="top_ezgripper_finger_L2_1" link2="top_ezgripper_finger_L2_2" reason="User" />
+    <disable_collisions link1="base_body" link2="upper_arm_link" reason="User" />
+    <disable_collisions link1="base_body" link2="base_link" reason="Default" />
+    <disable_collisions link1="base_body" link2="base_scan" reason="Adjacent" />
+    <disable_collisions link1="base_body" link2="boad" reason="Adjacent" />
+    <disable_collisions link1="base_body" link2="container" reason="Never" />
+    <disable_collisions link1="base_body" link2="plane" reason="Adjacent" />
+    <disable_collisions link1="base_body" link2="shoulder_link" reason="Default" />
+    <disable_collisions link1="base_link" link2="base_scan" reason="Never" />
+    <disable_collisions link1="base_link" link2="boad" reason="Adjacent" />
+    <disable_collisions link1="base_link" link2="container" reason="Never" />
+    <disable_collisions link1="base_link" link2="plane" reason="Never" />
+    <disable_collisions link1="base_link" link2="shoulder_link" reason="Adjacent" />
+    <disable_collisions link1="base_scan" link2="boad" reason="Never" />
+    <disable_collisions link1="base_scan" link2="bottom_ezgripper_finger_L2_2" reason="Never" />
+    <disable_collisions link1="base_scan" link2="camera_attachment_1_link" reason="Never" />
+    <disable_collisions link1="base_scan" link2="container" reason="Never" />
+    <disable_collisions link1="base_scan" link2="cylinder" reason="Never" />
+    <disable_collisions link1="base_scan" link2="ee_link" reason="Never" />
+    <disable_collisions link1="base_scan" link2="plane" reason="Never" />
+    <disable_collisions link1="base_scan" link2="shoulder_link" reason="Never" />
+    <disable_collisions link1="base_scan" link2="top_ezgripper_finger_L1_1" reason="Never" />
+    <disable_collisions link1="base_scan" link2="top_ezgripper_finger_L1_2" reason="Never" />
+    <disable_collisions link1="base_scan" link2="top_ezgripper_finger_L2_2" reason="Never" />
+    <disable_collisions link1="boad" link2="container" reason="Adjacent" />
+    <disable_collisions link1="boad" link2="plane" reason="Never" />
+    <disable_collisions link1="boad" link2="shoulder_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_1" link2="bottom_ezgripper_finger_L1_2" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_1" link2="bottom_ezgripper_finger_L2_1" reason="Adjacent" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_1" link2="bottom_ezgripper_palm_link" reason="Adjacent" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_1" link2="camera_attachment_1_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_1" link2="camera_body_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_1" link2="cylinder" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_1" link2="ee_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_1" link2="top_ezgripper_finger_L1_1" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_1" link2="top_ezgripper_finger_L1_2" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_1" link2="top_ezgripper_finger_L2_1" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_1" link2="top_ezgripper_finger_L2_2" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_1" link2="top_ezgripper_palm_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_1" link2="wrist_1_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_1" link2="wrist_2_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_1" link2="wrist_3_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_2" link2="bottom_ezgripper_finger_L2_2" reason="Adjacent" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_2" link2="bottom_ezgripper_palm_link" reason="Adjacent" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_2" link2="camera_attachment_1_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_2" link2="camera_body_link" reason="Never" />
+    <!-- <disable_collisions link1="bottom_ezgripper_finger_L1_2" link2="cylinder" reason="Never" /> -->
+    <disable_collisions link1="bottom_ezgripper_finger_L1_2" link2="ee_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_2" link2="top_ezgripper_finger_L1_1" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_2" link2="top_ezgripper_finger_L1_2" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_2" link2="top_ezgripper_finger_L2_1" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_2" link2="top_ezgripper_finger_L2_2" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_2" link2="top_ezgripper_palm_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_2" link2="wrist_1_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_2" link2="wrist_2_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L1_2" link2="wrist_3_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_1" link2="bottom_ezgripper_palm_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_1" link2="camera_attachment_1_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_1" link2="camera_body_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_1" link2="cylinder" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_1" link2="ee_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_1" link2="top_ezgripper_finger_L1_1" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_1" link2="top_ezgripper_finger_L1_2" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_1" link2="top_ezgripper_finger_L2_1" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_1" link2="top_ezgripper_finger_L2_2" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_1" link2="top_ezgripper_palm_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_1" link2="wrist_1_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_1" link2="wrist_2_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_1" link2="wrist_3_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_2" link2="bottom_ezgripper_palm_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_2" link2="camera_attachment_1_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_2" link2="camera_body_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_2" link2="cylinder" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_2" link2="ee_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_2" link2="top_ezgripper_finger_L1_1" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_2" link2="top_ezgripper_finger_L1_2" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_2" link2="top_ezgripper_finger_L2_1" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_2" link2="top_ezgripper_finger_L2_2" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_2" link2="top_ezgripper_palm_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_2" link2="wrist_1_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_2" link2="wrist_2_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_finger_L2_2" link2="wrist_3_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_palm_link" link2="camera_attachment_1_link" reason="Adjacent" />
+    <disable_collisions link1="bottom_ezgripper_palm_link" link2="camera_body_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_palm_link" link2="cylinder" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_palm_link" link2="ee_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_palm_link" link2="top_ezgripper_finger_L1_1" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_palm_link" link2="top_ezgripper_finger_L1_2" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_palm_link" link2="top_ezgripper_finger_L2_1" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_palm_link" link2="top_ezgripper_finger_L2_2" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_palm_link" link2="top_ezgripper_palm_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_palm_link" link2="wrist_1_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_palm_link" link2="wrist_2_link" reason="Never" />
+    <disable_collisions link1="bottom_ezgripper_palm_link" link2="wrist_3_link" reason="Never" />
+    <disable_collisions link1="camera_attachment_1_link" link2="camera_body_link" reason="Adjacent" />
+    <disable_collisions link1="camera_attachment_1_link" link2="cylinder" reason="Adjacent" />
+    <disable_collisions link1="camera_attachment_1_link" link2="ee_link" reason="Adjacent" />
+    <disable_collisions link1="camera_attachment_1_link" link2="top_ezgripper_finger_L1_1" reason="Never" />
+    <disable_collisions link1="camera_attachment_1_link" link2="top_ezgripper_finger_L1_2" reason="Never" />
+    <disable_collisions link1="camera_attachment_1_link" link2="top_ezgripper_finger_L2_1" reason="Never" />
+    <disable_collisions link1="camera_attachment_1_link" link2="top_ezgripper_finger_L2_2" reason="Never" />
+    <disable_collisions link1="camera_attachment_1_link" link2="top_ezgripper_palm_link" reason="Adjacent" />
+    <disable_collisions link1="camera_attachment_1_link" link2="wrist_1_link" reason="Never" />
+    <disable_collisions link1="camera_attachment_1_link" link2="wrist_2_link" reason="Never" />
+    <disable_collisions link1="camera_attachment_1_link" link2="wrist_3_link" reason="Never" />
+    <disable_collisions link1="camera_body_link" link2="cylinder" reason="Never" />
+    <disable_collisions link1="camera_body_link" link2="ee_link" reason="Never" />
+    <disable_collisions link1="camera_body_link" link2="top_ezgripper_finger_L1_1" reason="Never" />
+    <disable_collisions link1="camera_body_link" link2="top_ezgripper_finger_L1_2" reason="Never" />
+    <disable_collisions link1="camera_body_link" link2="top_ezgripper_finger_L2_1" reason="Never" />
+    <disable_collisions link1="camera_body_link" link2="top_ezgripper_finger_L2_2" reason="Never" />
+    <disable_collisions link1="camera_body_link" link2="top_ezgripper_palm_link" reason="Never" />
+    <disable_collisions link1="camera_body_link" link2="wrist_1_link" reason="Never" />
+    <disable_collisions link1="camera_body_link" link2="wrist_2_link" reason="Never" />
+    <disable_collisions link1="camera_body_link" link2="wrist_3_link" reason="Never" />
+    <disable_collisions link1="container" link2="plane" reason="Never" />
+    <disable_collisions link1="container" link2="shoulder_link" reason="Never" />
+    <disable_collisions link1="cylinder" link2="ee_link" reason="Never" />
+    <disable_collisions link1="cylinder" link2="top_ezgripper_finger_L1_1" reason="Never" />
+    <disable_collisions link1="cylinder" link2="top_ezgripper_finger_L1_2" reason="Never" />
+    <disable_collisions link1="cylinder" link2="top_ezgripper_finger_L2_1" reason="Never" />
+    <disable_collisions link1="cylinder" link2="top_ezgripper_finger_L2_2" reason="Never" />
+    <disable_collisions link1="cylinder" link2="top_ezgripper_palm_link" reason="Never" />
+    <disable_collisions link1="cylinder" link2="wrist_1_link" reason="Never" />
+    <disable_collisions link1="cylinder" link2="wrist_2_link" reason="Never" />
+    <disable_collisions link1="cylinder" link2="wrist_3_link" reason="Never" />
+    <disable_collisions link1="ee_link" link2="top_ezgripper_finger_L1_1" reason="Never" />
+    <disable_collisions link1="ee_link" link2="top_ezgripper_finger_L1_2" reason="Never" />
+    <disable_collisions link1="ee_link" link2="top_ezgripper_finger_L2_1" reason="Never" />
+    <disable_collisions link1="ee_link" link2="top_ezgripper_finger_L2_2" reason="Never" />
+    <disable_collisions link1="ee_link" link2="top_ezgripper_palm_link" reason="Never" />
+    <disable_collisions link1="ee_link" link2="wrist_1_link" reason="Never" />
+    <disable_collisions link1="ee_link" link2="wrist_2_link" reason="Never" />
+    <disable_collisions link1="ee_link" link2="wrist_3_link" reason="Adjacent" />
+    <disable_collisions link1="forearm_link" link2="upper_arm_link" reason="Adjacent" />
+    <disable_collisions link1="forearm_link" link2="wrist_1_link" reason="Adjacent" />
+    <disable_collisions link1="plane" link2="shoulder_link" reason="Never" />
+    <disable_collisions link1="plane" link2="upper_arm_link" reason="Never" />
+    <disable_collisions link1="shoulder_link" link2="upper_arm_link" reason="Adjacent" />
+    <disable_collisions link1="top_ezgripper_finger_L1_1" link2="top_ezgripper_finger_L1_2" reason="Never" />
+    <disable_collisions link1="top_ezgripper_finger_L1_1" link2="top_ezgripper_finger_L2_1" reason="Adjacent" />
+    <disable_collisions link1="top_ezgripper_finger_L1_1" link2="top_ezgripper_palm_link" reason="Adjacent" />
+    <disable_collisions link1="top_ezgripper_finger_L1_1" link2="wrist_1_link" reason="Never" />
+    <disable_collisions link1="top_ezgripper_finger_L1_1" link2="wrist_2_link" reason="Never" />
+    <disable_collisions link1="top_ezgripper_finger_L1_1" link2="wrist_3_link" reason="Never" />
+    <disable_collisions link1="top_ezgripper_finger_L1_2" link2="top_ezgripper_finger_L2_2" reason="Adjacent" />
+    <disable_collisions link1="top_ezgripper_finger_L1_2" link2="top_ezgripper_palm_link" reason="Adjacent" />
+    <disable_collisions link1="top_ezgripper_finger_L1_2" link2="wrist_1_link" reason="Never" />
+    <disable_collisions link1="top_ezgripper_finger_L1_2" link2="wrist_2_link" reason="Never" />
+    <disable_collisions link1="top_ezgripper_finger_L1_2" link2="wrist_3_link" reason="Never" />
+    <disable_collisions link1="top_ezgripper_finger_L2_1" link2="top_ezgripper_palm_link" reason="Never" />
+    <disable_collisions link1="top_ezgripper_finger_L2_1" link2="wrist_1_link" reason="Never" />
+    <disable_collisions link1="top_ezgripper_finger_L2_1" link2="wrist_2_link" reason="Never" />
+    <disable_collisions link1="top_ezgripper_finger_L2_1" link2="wrist_3_link" reason="Never" />
+    <disable_collisions link1="top_ezgripper_finger_L2_2" link2="top_ezgripper_palm_link" reason="Never" />
+    <disable_collisions link1="top_ezgripper_finger_L2_2" link2="wrist_1_link" reason="Never" />
+    <disable_collisions link1="top_ezgripper_finger_L2_2" link2="wrist_2_link" reason="Never" />
+    <disable_collisions link1="top_ezgripper_finger_L2_2" link2="wrist_3_link" reason="Never" />
+    <disable_collisions link1="top_ezgripper_palm_link" link2="wrist_1_link" reason="Never" />
+    <disable_collisions link1="top_ezgripper_palm_link" link2="wrist_2_link" reason="Never" />
+    <disable_collisions link1="top_ezgripper_palm_link" link2="wrist_3_link" reason="Never" />
+    <disable_collisions link1="wrist_1_link" link2="wrist_2_link" reason="Adjacent" />
+    <disable_collisions link1="wrist_1_link" link2="wrist_3_link" reason="Never" />
+    <disable_collisions link1="wrist_2_link" link2="wrist_3_link" reason="Adjacent" />
+</robot>

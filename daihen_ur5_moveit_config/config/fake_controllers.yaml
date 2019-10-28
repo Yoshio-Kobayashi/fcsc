@@ -1,0 +1,60 @@
+controller_list:
+  - name: fake_mobile_base_controller
+    joints:
+      - map_to_base_footprint
+  - name: fake_manipulator_controller
+    joints:
+      - shoulder_pan_joint
+      - shoulder_lift_joint
+      - elbow_joint
+      - wrist_1_joint
+      - wrist_2_joint
+      - wrist_3_joint
+  - name: fake_endeffector_controller
+    joints:
+      - top_ezgripper_knuckle_palm_L1_1
+      - bottom_ezgripper_knuckle_palm_L1_1
+  - name: fake_manipulator_wrap_controller
+    joints:
+      - shoulder_pan_joint
+      - shoulder_lift_joint
+      - elbow_joint
+      - wrist_1_joint
+      - wrist_2_joint
+      - wrist_3_joint
+  - name: fake_daisha_controller
+    joints:
+      - map_to_base_footprint
+      - boad_joint
+  - name: fake_boad_controller
+    joints:
+      - boad_joint
+  - name: fake_manipulator_with_elevator_controller
+    joints:
+      - boad_joint
+      - shoulder_pan_joint
+      - shoulder_lift_joint
+      - elbow_joint
+      - wrist_1_joint
+      - wrist_2_joint
+      - wrist_3_joint
+  - name: fake_mobile_manipulator_controller
+    joints:
+      - map_to_base_footprint
+      - boad_joint
+      - shoulder_pan_joint
+      - shoulder_lift_joint
+      - elbow_joint
+      - wrist_1_joint
+      - wrist_2_joint
+      - wrist_3_joint
+initial:
+  - group: manipulator
+    pose: masita4
+    # pose: masita3
+    # pose: container_center
+    # pose: naname2
+  - group: endeffector
+    pose: half_close
+  # - group: daisha
+  #   pose: daisha_down

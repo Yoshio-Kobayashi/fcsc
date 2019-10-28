@@ -1,0 +1,38 @@
+<launch>
+  <arg name="sim" default="false" />
+  <arg name="limited" default="false"/>
+  <arg name="debug" default="false" />
+  <arg name="realsense" default="true"/>
+  <arg name="use_octomap" default="false"/>
+
+  <!-- add by matsumoto -->
+  <arg name="maue" default="false"/>
+  <arg name="mayoko" default="false"/>
+  <arg name="naname" default="false"/>
+
+  <!-- <node unless="$(arg sim)" pkg="tf" type="static_transform_publisher" name="virtual_joint_broadcaster_0" args="0 0 0 0 0 0 map base_footprint 100" /> -->
+
+  <!-- Remap follow_joint_trajectory -->
+  <remap if="$(arg sim)" from="arm_controller/follow_joint_trajectory" to="/arm_controller/follow_joint_trajectory"/>
+  <remap unless="$(arg sim)" from="arm_controller/follow_joint_trajectory" to="follow_joint_trajectory"/>
+
+  <remap if="$(arg sim)" from="boad_joint_controller/follow_joint_trajectory" to="/boad_joint_controller/follow_joint_trajectory"/>
+  <remap unless="$(arg sim)" from="boad_joint_controller/follow_joint_trajectory" to="follow_joint_trajectory"/>
+
+  <!-- <remap from="gripper_controller/gripper_cmd" to="/ezgripper/main"/> -->
+  <remap from="gripper_controller/follow_joint_trajectory" to="/ezgripper/main"/>
+
+  <!-- Launch moveit -->
+  <include file="$(find daihen_ur5_moveit_config)/launch/move_group.launch">
+    <arg name="realsense" value="$(arg realsense)"/>
+    <arg name="limited" value="$(arg limited)"/>
+    <arg name="debug" value="$(arg debug)" />
+    <arg name="sim" value="$(arg sim)"/>
+    <arg name="use_octomap" value="$(arg use_octomap)"/>
+
+    <!-- add by matsumoto -->
+    <arg name="maue" value="$(arg maue)"/>
+    <arg name="mayoko" value="$(arg mayoko)"/>
+    <arg name="naname" value="$(arg naname)"/>
+  </include>
+</launch>

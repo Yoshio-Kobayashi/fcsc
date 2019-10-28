@@ -1,0 +1,37 @@
+<launch>
+  <!-- add by matsumoto -->
+  <arg name="maue" default="false"/>
+  <arg name="mayoko" default="false"/>
+  <arg name="naname" default="true"/>
+
+  <!-- By default we do not overwrite the URDF. Change the following to true to change the default behavior -->
+  <arg name="load_robot_description" default="false"/>
+
+  <!-- The name of the parameter under which the URDF is loaded -->
+  <arg name="robot_description" default="robot_description"/>
+
+  <!-- Load universal robot description format (URDF) -->
+  <group if="$(arg load_robot_description)">
+    <param if="$(arg maue)" name="$(arg robot_description)" command="$(find xacro)/xacro --inorder '$(find fcsc_description)/model/daihen_ur5.urdf.xacro' maue_ur5:=true"/>
+
+    <param if="$(arg mayoko)" name="$(arg robot_description)" command="$(find xacro)/xacro --inorder '$(find fcsc_description)/model/daihen_ur5.urdf.xacro' mayoko_ur5:=true"/>
+
+    <param if="$(arg naname)" name="$(arg robot_description)" command="$(find xacro)/xacro --inorder '$(find fcsc_description)/model/daihen_ur5.urdf.xacro' naname_ur5:=true"/>
+  </group>
+
+  <!-- The semantic description that corresponds to the URDF -->
+  <param if="$(arg maue)" name="$(arg robot_description)_semantic" textfile="$(find daihen_ur5_moveit_config)/config/maue/daihen_ur5.srdf" />
+  <param if="$(arg mayoko)" name="$(arg robot_description)_semantic" textfile="$(find daihen_ur5_moveit_config)/config/mayoko/daihen_ur5.srdf" />
+  <param if="$(arg naname)" name="$(arg robot_description)_semantic" textfile="$(find daihen_ur5_moveit_config)/config/naname/daihen_ur5.srdf" />
+
+  <!-- Load updated joint limits (override information from URDF) -->
+  <group ns="$(arg robot_description)_planning">
+    <rosparam command="load" file="$(find daihen_ur5_moveit_config)/config/joint_limits.yaml"/>
+  </group>
+
+  <!-- Load default settings for kinematics; these settings are overridden by settings in a node's namespace -->
+  <group ns="$(arg robot_description)_kinematics">
+    <rosparam command="load" file="$(find daihen_ur5_moveit_config)/config/kinematics.yaml"/>
+  </group>
+
+</launch>
