@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<launch>
+
+  <!-- Robot state publisher -->
+  <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
+    <param name="publish_frequency" type="double" value="50.0" />
+    <param name="tf_prefix" type="string" value="" />
+    <!-- <remap from="/joint_states" to="/dulcinea_ur5/joint_states"/> -->
+  </node>
+
+  <!-- Fake Calibration -->
+  <node pkg="rostopic" type="rostopic" name="fake_joint_calibration"
+        args="pub /calibrated std_msgs/Bool true" />
+
+  <!-- joint_state_controller -->
+  <rosparam file="$(find fcsc_gazebo)/controller/joint_state_controller.yaml" command="load"/>
+  <node name="joint_state_controller_spawner" pkg="controller_manager" type="controller_manager" args="spawn joint_state_controller" respawn="false" output="screen"/>
+
+  <!-- <rosparam file="$(find fcsc_gazebo)/controller/joint_state_controller.yaml" command="load" ns="/dulcinea_ur5"/>
+  <node name="joint_state_controller_spawner" pkg="controller_manager" type="controller_manager" args="spawn joint_state_controller" respawn="false" output="screen" ns="/dulcinea_ur5"/> -->
+
+  <!-- Starting Joint state publisher node which will publish the joint values -->
+  <!-- <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">
+    <param name="/use_gui" value="false"/>
+    <rosparam param="/source_list">[/gazebo/joint_states, /ezgripper/joint_states]</rosparam>
+    <param name="rate" value="50" />
+  </node> -->
+
+</launch>

@@ -1,0 +1,7 @@
+boad_joint_controller:
+  # type: position_controllers/JointTrajectoryController
+  # joints:
+  #    - boad_joint
+  type: position_controllers/JointPositionController
+  joint: boad_joint
+  pid: {p: 100.0, i: 0.01, d: 10.0}

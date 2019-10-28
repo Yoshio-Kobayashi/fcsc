@@ -1,0 +1,20 @@
+gripper_controller:
+  # type: position_controllers/GripperActionController
+  # joint: top_ezgripper_knuckle_palm_L1_1
+  # max_effort: 10.0
+  # # stall_timeout: 0.01
+  # gains:
+  #   top_ezgripper_knuckle_palm_L1_1: {p: 10.0, i: 0.1, d: 10.0}
+
+  type: position_controllers/JointTrajectoryController
+  joints:
+     - top_ezgripper_knuckle_palm_L1_1
+     - bottom_ezgripper_knuckle_palm_L1_1
+  constraints:
+      goal_time: 0.6
+      stopped_velocity_tolerance: 0.05
+      top_ezgripper_knuckle_palm_L1_1: {trajectory: 0.1, goal: 0.1}
+      bottom_ezgripper_knuckle_palm_L1_1: {trajectory: 0.1, goal: 0.1}
+  stop_trajectory_duration: 0.5
+  state_publish_rate:  25
+  action_monitor_rate: 10
