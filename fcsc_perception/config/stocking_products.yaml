@@ -1,0 +1,21 @@
+stocking_products :
+  # A 数が多い方
+  # B 数が少ない方
+  onigiri :
+    # おにぎりは多いほうを手前に並べる
+    A :
+      number : 2
+    B :
+      number : 2
+  drink :
+    # ドリンクは多いほうを手前に並べる
+    A :
+      number : 2
+    B :
+      number : 2
+  bento :
+    # 弁当は多い方を下に積む
+    A :
+      number : 2
+    B :
+      number : 2

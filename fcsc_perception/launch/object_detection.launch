@@ -1,0 +1,70 @@
+<launch>
+  <arg name="depth" default="false" />
+  <arg name="plane_frame_id" default="container" />
+  <arg name="shelf_detection" default="false"/>
+  <arg name="depth_estimater" default="false"/>
+
+  <!-- ar_track_alvar for objetc detection -->
+  <include unless="$(arg depth)" file="$(find fcsc_perception)/launch/no_depth.launch">
+    <arg name="marker_size" value="3" />
+  	<arg name="max_new_marker_error" value="0.08" />
+  	<arg name="max_track_error" value="0.2" />
+  	<arg name="cam_image_topic" value="/camera/rgb/image_raw" />
+  	<arg name="cam_info_topic" value="/camera/rgb/camera_info" />
+    <!-- <arg name="output_frame" value="/base_link" /> -->
+    <arg name="output_frame" value="map" />
+  </include>
+  <include if="$(arg depth)" file="$(find fcsc_perception)/launch/depth.launch">
+    <arg name="marker_size" value="2" />
+  	<arg name="max_new_marker_error" value="0.08" />
+  	<arg name="max_track_error" value="0.2" />
+    <arg name="cam_image_topic" value="/camera/depth/points" />
+  	<!-- <arg name="cam_image_topic" value="/camera/depth_registered/points" /> -->
+  	<arg name="cam_info_topic" value="/camera/rgb/camera_info" />
+    <arg name="output_frame" value="map" />
+  </include>
+  <!-- <arg name="output_frame" value="camera_rgb_optical_frame" /> -->
+  <!-- <arg name="output_frame" value="/camera_link" /> -->
+  <!-- <arg name="output_frame" value="/container" /> -->
+  <!-- <arg name="output_frame" value="/camera_link" /> -->
+
+  <!-- ar_track_alvar for shelf detection -->
+  <include if="$(arg shelf_detection)" file="$(find fcsc_perception)/launch/no_depth_bundle.launch" ns="shelf_detector">
+    <arg name="marker_size" value="12" /> <!-- value="3" -->
+  	<arg name="max_new_marker_error" value="0.08" />
+  	<arg name="max_track_error" value="0.2" />
+  	<arg name="cam_image_topic" value="/camera/rgb/image_raw" />
+  	<arg name="cam_info_topic" value="/camera/rgb/camera_info" />
+    <arg name="output_frame" value="map" />
+    <arg name="bundle_files" value=" $(find fcsc_perception)/config/shelfB_kdel_markers.xml $(find fcsc_perception)/config/shelf_kdel_20171128_markers.xml" />
+    <!-- <arg name="bundle_files" value="$(find fcsc_perception)/config/shelf_A-v2_markers.xml $(find fcsc_perception)/config/shelf_B-v2_markers.xml" /> -->
+    <!-- <arg name="bundle_files" value="$(find fcsc_perception)/config/shelf_A_markers.xml $(find fcsc_perception)/config/shelf_B_markers.xml" /> -->
+  </include>
+  <node if="$(arg shelf_detection)" name="shelf_detector" pkg="fcsc_perception" type="shelf_detector"/>
+
+  <!-- <node name="detected_ar_pose_marker_pub" pkg="fcsc_perception" type="detected_ar_pose_marker_publisher"/> -->
+  <!-- <rosparam command="load" file="$(find fcsc_perception)/config/tf_from_ar_marker_to_products.yaml" /> -->
+  <rosparam command="load" file="$(find fcsc_perception)/config/tf_from_ar_marker_to_products.yaml" />
+  <rosparam command="load" file="$(find fcsc_perception)/config/tf_from_ar_marker_to_sandwich.yaml" />
+
+  <!-- <node name="detected_object_array_publisher_from_ar_pose_marker" pkg="fcsc_perception" type="detected_object_array_publisher_from_ar_pose_marker" output="screen">
+    <param name="plane_frame_id" value="$(arg plane_frame_id)"/>
+  </node> -->
+
+  <node name="ar_pose_to_object_pose_server" pkg="fcsc_perception" type="ar_pose_to_object_pose_server" output="screen">
+    <param name="output_frame_id" value="map"/>
+    <param name="plane_frame_id" value="$(arg plane_frame_id)"/>
+    <param name="depth_frame_id" value="camera_link"/>
+  </node>
+
+  <!-- <node name="damy_object_pose_server" pkg="fcsc_perception" type="damy_object_pose_server" output="screen"/> -->
+
+  <node if="$(arg depth_estimater)" name="depth_estimater" pkg="depth_estimater" type="depth_estimater" output="screen">
+    <param name="depth_image_topic" value="/camera/depth/image_raw"/>
+    <param name="depth_frame_id" value="camera_link"/>
+    <param name="use_simulator" value="true"/>
+  </node>
+
+  <node name="detect_object_server" pkg="fcsc_perception" type="detect_object_server" output="screen"/>
+
+</launch>
