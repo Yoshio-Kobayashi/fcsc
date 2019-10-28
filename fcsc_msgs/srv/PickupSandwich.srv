@@ -1,0 +1,9 @@
+string name
+fcsc_msgs/RecognizedObject sandwich
+
+---
+bool success
+int8 manipulation_type
+
+int8 RECOVER=0
+int8 FACEUP=1

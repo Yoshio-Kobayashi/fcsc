@@ -1,0 +1,4 @@
+#empty
+---
+string[] detected_product_names
+fcsc_msgs/RecognizedObjectArray detected_object_array

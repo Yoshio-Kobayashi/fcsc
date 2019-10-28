@@ -1,0 +1,10 @@
+fcsc_msgs/RecognizedObject object
+fcsc_msgs/Grasp grasp
+int8 manipulation_type
+int8 RECOVER=0
+int8 FACEUP=1
+---
+bool success
+
+# The performed grasp
+fcsc_msgs/Grasp grasp

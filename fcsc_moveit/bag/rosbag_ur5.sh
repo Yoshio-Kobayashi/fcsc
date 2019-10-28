@@ -1,0 +1,2 @@
+#! /bin/sh
+rosbag record /ur_driver/URScript /ur_driver/io_states /ur_driver/joint_speed /follow_joint_trajectory/cancel /follow_joint_trajectory/result /follow_joint_trajectory/feedback /follow_joint_trajectory/status /follow_joint_trajectory/goal /execute_trajectory/cancel /execute_trajectory/result /execute_trajectory/feedback /execute_trajectory/status /execute_trajectory/goal /trajectory_execution_event /ur5/joint_states /tool_velocity /wrench /ezgripper/joint_states /joint_states

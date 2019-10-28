@@ -1,0 +1,49 @@
+<launch>
+  <arg name="rviz" default="true" />
+  <arg name="ur5_demo" default="true"/>
+  <arg name="use_octomap" default="false"/>
+  <arg name="navigation" default="false"/>
+  <arg name="daihen_mobile_robot" default="true"/>
+  <arg name="maue" default="false"/>
+  <arg name="mayoko" default="false"/>
+  <arg name="naname" default="true"/>
+
+  <param name="use_simulator" value="false"/>
+
+  <!-- <node unless="$(arg navigation)" pkg="tf" type="static_transform_publisher" name="virtual_joint_broadcaster_0" args="0 0 0 0 0 0 map base_footprint 100" /> -->
+  <node pkg="fcsc_tf" type="virtual_joint_broadcaster" name="virtual_joint_broadcaster">
+      <param name="world_frame" value="map" />
+      <param name="base_frame" value="base_footprint"/>
+  </node>
+
+  <!-- Daihen mobiel robot -->
+  <group if="$(arg daihen_mobile_robot)">
+    <include file="$(find daihen_ur5_moveit_config)/launch/daihen_ur5_moveit_planning_execution.launch">
+      <arg name="realsense" value="true" />
+      <arg name="sim" value="false"/>
+      <arg name="use_octomap" value="$(arg use_octomap)"/>
+      <arg name="maue" value="$(arg maue)"/>
+      <arg name="naname" value="$(arg naname)"/>
+      <arg name="mayoko" value="$(arg mayoko)"/>
+    </include>
+    <include if="$(arg rviz)" file="$(find daihen_ur5_moveit_config)/launch/moveit_rviz.launch">
+      <arg name="config" value="true"/>
+      <!-- <arg if="$(arg ur5_demo)" name="command_args" value="-d $(find daihen_ur5_moveit_config)/launch/moveit_ur5_demo.rviz" /> -->
+    </include>
+  </group>
+
+  <!-- Dulcinea -->
+  <group unless="$(arg daihen_mobile_robot)">
+    <include file="$(find dulcinea_ur5_moveit_config)/launch/dulcinea_ur5_moveit_planning_execution.launch">
+      <arg name="realsense" value="true" />
+      <arg name="sim" value="false"/>
+      <arg name="use_octomap" value="$(arg use_octomap)"/>
+    </include>
+    <include if="$(arg rviz)" file="$(find dulcinea_ur5_moveit_config)/launch/moveit_rviz.launch">
+      <arg name="config" value="true"/>
+      <arg if="$(arg ur5_demo)" name="command_args" value="-d $(find dulcinea_ur5_moveit_config)/launch/moveit_ur5_demo.rviz" />
+    </include>
+  </group>
+
+
+</launch>

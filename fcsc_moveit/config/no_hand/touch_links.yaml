@@ -1,0 +1,4 @@
+touch_links:
+  - gripper_link
+  - gripper_wrap_link
+  - tool0

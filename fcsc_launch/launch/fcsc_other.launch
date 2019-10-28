@@ -1,0 +1,78 @@
+<launch>
+  <arg name="RealSenseSR300" default="false"/>
+  <arg name="RealSenseD435" default="true"/>
+  <arg name="shelf_detection" default="true"/>
+  <arg name="daihen_mobile_robot" default="true"/>
+  <arg name="use_simulator" default="false" />
+
+  <arg name="maue" default="false"/>
+  <arg name="mayoko" default="false"/>
+  <arg name="naname" default="true"/>
+
+  <param name="use_simulator" value="$(arg use_simulator)"/>
+  <param name="attach_link" value="top_ezgripper_palm_link"/>
+
+  <rosparam command="load" file="$(find fcsc_perception)/config/scrap_sandwich_id.yaml" />
+  <rosparam command="load" file="$(find fcsc_description)/config/container_size.yaml" />
+  <rosparam command="load" file="$(find fcsc_description)/config/shelf_size.yaml" />
+  <rosparam command="load" file="$(find fcsc_description)/config/stocking_area.yaml" />
+  <rosparam command="load" file="$(find fcsc_moveit)/config/touch_links.yaml" />
+  <rosparam command="load" file="$(find fcsc_perception)/config/tf_from_ar_marker_to_sandwich.yaml" />
+  <rosparam command="load" file="$(find fcsc_perception)/config/shelf_marker_id.yaml" />
+
+  <!-- tf -->
+  <node pkg="fcsc_tf" type="shelf_tf_broadcaster"           name="shelf_tf_broadcaster"/>
+  <node pkg="fcsc_tf" type="detected_object_tf_broadcaster" name="detected_object_tf_broadcaster"/>
+  <node pkg="fcsc_tf" type="grasped_object_tf_broadcaster"  name="grasped_object_tf_broadcaster" output="screen"/>
+
+  <!-- RealSenseSR300 -->
+  <!-- <include if="$(arg RealSenseSR300)" file="$(find realsense_camera)/launch/sr300_nodelet_rgbd.launch">
+    <arg name="color_width" value="1920"/>
+    <arg name="color_height" value="1080"/>
+  </include> -->
+  <!-- <node if="$(arg RealSenseSR300)" name="publish_camera_info" pkg="fcsc_description" type="publish_camera_info.py" args="$(find fcsc_description)/config/realsense_rgb_calibration_high_quality.yaml"/> -->
+
+  <!-- RealSenseD435 -->
+  <!-- <include if="$(arg RealSenseD435)" file="$(find realsense2_camera)/launch/rs_rgbd.launch">
+    <arg name="color_width" value="1920"/>
+    <arg name="color_height" value="1080"/>
+    <arg name="color_fps" value="60"/>
+  </include> -->
+
+  <!-- ar_track_alvar for object detection -->
+  <include file="$(find fcsc_perception)/launch/no_depth.launch">
+    <arg name="marker_size" value="3.0" /><!-- [cm] -->
+  	<arg name="max_new_marker_error" value="0.08" />
+  	<arg name="max_track_error" value="0.2"/>
+    <arg name="cam_image_topic" value="/camera/color/image_raw"/>
+  	<arg if="$(arg RealSenseSR300)" name="cam_info_topic" value="/my_calibration/camera/rgb/camera_info"/>
+  	<arg if="$(arg RealSenseD435)" name="cam_info_topic" value="/camera/color/camera_info"/>
+    <arg name="output_frame" value="/camera_link" />
+  </include>
+
+  <node name="ar_pose_to_object_pose_server" pkg="fcsc_perception" type="ar_pose_to_object_pose_server" output="screen">
+    <param name="output_frame_id" value="map"/>
+    <param name="plane_frame_id" value="shelfB_board_2"/>
+    <param name="depth_frame_id" value="camera_depth_optical_frame"/>
+  </node>
+
+  <node name="detect_object_server" pkg="fcsc_perception" type="detect_object_server" output="screen"/>
+
+  <!-- ar_track_alvar for shelf detection -->
+  <include if="$(arg shelf_detection)" file="$(find fcsc_perception)/launch/no_depth.launch" ns="shelf_detector">
+    <arg name="marker_size" value="5" />
+  	<arg name="max_new_marker_error" value="0.08" />
+  	<arg name="max_track_error" value="0.2" />
+  	<arg name="cam_image_topic" value="/camera/color/image_raw" />
+  	<arg if="$(arg RealSenseSR300)" name="cam_info_topic" value="/my_calibration/camera/rgb/camera_info" />
+  	<arg if="$(arg RealSenseD435)" name="cam_info_topic" value="/camera/color/camera_info" />
+    <arg name="output_frame" value="base_footprint" />
+  </include>
+
+  <param name="shelfA_marker_id" value="100"/>
+  <param name="shelfB_marker_id" value="120"/>
+  <node if="$(arg shelf_detection)" name="shelf_detector" pkg="fcsc_perception" type="shelf_detector">
+    <param name="error_angle_thresh" value="0.0"/><!-- [deg] -->
+  </node>
+
+</launch>

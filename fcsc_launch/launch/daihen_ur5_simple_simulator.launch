@@ -1,0 +1,71 @@
+<launch>
+  <arg name="rviz" default="true" />
+  <arg name="visualize" default="true"/>
+  <arg name="depth" default="false" />
+  <arg name="gazebo" default="true" />
+  <arg name="all" default="false" />
+  <arg name="onigiri" default="false" />
+  <arg name="bento" default="false" />
+  <arg name="drink" default="false" />
+  <arg name="use_simulator" default="true" />
+
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">
+    <param name="/use_gui" value="false"/>
+    <rosparam param="/source_list">[/gazebo/joint_states, /ezgripper/joint_states]</rosparam>
+    <param name="rate" value="50" />
+  </node>
+
+  <param name="use_simulator" value="$(arg use_simulator)"/>
+  <!-- <param name="attach_link" value="thumb_link"/> -->
+  <!-- <param name="attach_link" value="left_ezgripper_lower_finger_1"/> -->
+
+  <param name="robot_description" command="$(find xacro)/xacro.py '$(find fcsc_description)/model/daihen_ur5.urdf.xacro'"/>
+
+  <include if="$(arg gazebo)" file="$(find fcsc_gazebo)/launch/daihen_ur5.launch">
+    <arg name="world_name" value="$(find fcsc_gazebo)/worlds/empty_attacher.world"/>
+  </include>
+  <include file="$(find daihen_ur5_moveit_config)/launch/daihen_ur5_moveit_planning_execution.launch">
+    <arg name="sim" value="true"/>
+    <arg name="maue" value="false"/>
+    <arg name="naname" value="true"/>
+    <arg name="mayoko" value="false"/>
+  </include>
+  <include if="$(arg rviz)" file="$(find daihen_ur5_moveit_config)/launch/moveit_rviz.launch">
+    <arg name="config" value="true"/>
+  </include>
+
+  <!-- set home pose  -->
+  <include file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="20" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="set_daihen_ur5_home_pose.launch" />
+    <arg name="node_name" value="set_home_pose"/>
+  </include>
+
+  <!-- spawn objects -->
+  <include if="$(arg all)" file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="2" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="spawn_products.launch" />
+    <arg name="node_name" value="spawn_products"/>
+  </include>
+  <include if="$(arg onigiri)" file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="2" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="spawn_onigiri.launch" />
+    <arg name="node_name" value="spawn_onigiri"/>
+  </include>
+  <include if="$(arg drink)" file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="2" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="spawn_drink.launch" />
+    <arg name="node_name" value="spawn_drink"/>
+  </include>
+  <include if="$(arg bento)" file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="2" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="spawn_bento.launch" />
+    <arg name="node_name" value="spawn_bento"/>
+  </include>
+
+</launch>

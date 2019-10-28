@@ -1,0 +1,8 @@
+fcsc_msgs/PoseStampedWithCost[] target_poses
+geometry_msgs/Pose2D init_base_position
+moveit_msgs/WorkspaceParameters search_area
+float64 ik_timeout
+float64 ik_attemps
+---
+bool success
+geometry_msgs/Pose2D base_position

@@ -1,0 +1,10 @@
+<launch>
+  <arg name="high_quality" default="false"/>
+  <include file="$(find realsense2_camera)/launch/rs_rgbd.launch">
+    <arg if="$(arg high_quality)" name="color_width" value="1920"/>
+    <arg if="$(arg high_quality)" name="color_height" value="1080"/>
+    <!-- <arg name="color_fps" value="60"/> -->
+  </include>
+  <!-- <node if="$(arg high_quality)" name="publish_camera_info" pkg="fcsc_description" type="publish_camera_info.py" args="$(find fcsc_description)/config/realsenseD435_color_cal_high_quality.yaml"/>
+  <node unless="$(arg high_quality)" name="publish_camera_info" pkg="fcsc_description" type="publish_camera_info.py" args="$(find fcsc_description)/config/realsenseD435_color_cal.yaml"/> -->
+</launch>

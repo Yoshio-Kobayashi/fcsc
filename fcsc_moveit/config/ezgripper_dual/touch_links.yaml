@@ -1,0 +1,14 @@
+touch_links:
+  - gripper_link
+  - gripper_wrap_link
+  - top_ezgripper_finger_L1_1
+  - top_ezgripper_finger_L1_2
+  - top_ezgripper_finger_L2_1
+  - top_ezgripper_finger_L2_2
+  - top_ezgripper_palm_link
+  - bottom_ezgripper_finger_L1_1
+  - bottom_ezgripper_finger_L1_2
+  - bottom_ezgripper_finger_L2_1
+  - bottom_ezgripper_finger_L2_2
+  - bottom_ezgripper_palm_link
+  - tool0

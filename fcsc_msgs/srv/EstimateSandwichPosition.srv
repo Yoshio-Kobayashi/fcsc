@@ -1,0 +1,5 @@
+#empty
+string plane_frame_id
+shape_msgs/Plane plane
+---
+geometry_msgs/PointStamped[] sandwich_positions

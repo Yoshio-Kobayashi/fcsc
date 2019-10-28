@@ -1,0 +1,11 @@
+<launch>
+  <node pkg="ezgripper_driver" type="ezgripper.py" name="ezgripper" output="screen">
+    <param name="~port" value="/dev/ttyUSB0"/>
+    <param name="~baud" value="57600"/>
+    <!-- Controls several grippers synchronously as one.
+         The ids of the servos are listed in the brackets. -->
+    <!-- <rosparam param="grippers">{main:[1,2]}</rosparam> -->
+    <!-- <rosparam param="grippers">{bottom:[2]}</rosparam> -->
+    <rosparam param="grippers">{top:[2], bottom:[1], both:[1,2]}</rosparam>
+  </node>
+</launch>

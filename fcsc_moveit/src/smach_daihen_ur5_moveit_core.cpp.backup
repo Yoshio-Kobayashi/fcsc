@@ -1,0 +1,4012 @@
+#include "fcsc_moveit/smach_daihen_ur5_moveit_core.h"
+
+FcscCore::FcscCore(string group_name, string ee_name):
+  move_group(group_name),
+  planning_scene_monitor(ROBOT_DESCRIPTION),
+  robot_name("daihen_ur5"),
+  robot_hand(ee_name),
+  onigiri_placement_index(2, 0),
+  drink_placement_index(2, 0),
+  bento_placement_index(2, 0),
+  is_executing_(false),
+  is_succeeded_(true),
+  timeup_(false)
+{
+  ros::NodeHandle private_nh("~");
+  ros::NodeHandle nh;
+  XmlRpc::XmlRpcValue params;
+
+  nh.param<std::string>("visual_frame_id", visual_frame_id_, "map");
+
+  nh.param<std::string>("recover_pose_name",          recover_pose_name,          "masita4");
+  nh.param<std::string>("stock_pose_name",            stock_pose_name,            "masita2");
+  nh.param<std::string>("container_center_pose_name", container_center_pose_name, "container_center");
+
+  // visual_tools.reset(new rviz_visual_tools::RvizVisualTools(visual_frame_id_, "/visualization_marker"));
+  visual_tools.reset(new rviz_visual_tools::RvizVisualTools(visual_frame_id_, "/rviz_visual_tools"));
+  visual_tools->enableBatchPublishing();
+
+  private_nh.param<double>("min_velocity",    min_velocity,     0.2);
+  private_nh.param<double>("normal_velocity", normal_velocity,  0.4);
+  private_nh.param<double>("max_velocity",    max_velocity,     0.6);
+
+  nh.param("use_shelf_marker_detection", use_shelf_marker_detection_, true);
+
+  private_nh.getParam("attach_link", attach_link);
+
+  //touch_links_のリンク名を取得
+  nh.getParam("touch_links", params);
+  setTouchLinksParams(params);
+
+  nh.getParam("shelf_size/shelfA/depth", shelf_depth);
+  nh.getParam("shelf_size/shelfB/width", shelf_width);
+
+
+  nh.getParam("stocking_area", params);
+  setStockingAreaParams(params["onigiri"],  stocking_area[ONIGIRI]);
+  setStockingAreaParams(params["drink"],    stocking_area[DRINK]);
+  setStockingAreaParams(params["bento"],    stocking_area[BENTO]);
+  setStockingAreaParams(params["sandwich"], stocking_area[SANDWICH]);
+
+  //サンドイッチの廃棄品情報
+  nh.getParam("scrap_sandwich_id", params);
+  setScrapSandwichIdParams(params);
+  for (size_t i = 0; i < scrap_sandwich_ids.size(); i++) {
+    ROS_INFO("Scrap sandwich id[%s]", scrap_sandwich_ids[i].c_str());
+  }
+
+  grasp_planner.generateGraspPose("onigiri",  &product_grasps[ONIGIRI].grasps);
+  grasp_planner.generateGraspPose("drink",    &product_grasps[DRINK].grasps);
+  grasp_planner.generateGraspPose("bento",    &product_grasps[BENTO].grasps);
+  grasp_planner.generateGraspPose("sandwich", &product_grasps[SANDWICH].grasps);
+
+  /********************************** SMACH ******************************************/
+  detect_product_server   = nh.advertiseService("detect_product", &FcscCore::detectProduct, this);
+  detect_shelf_server     = nh.advertiseService("detect_shelf_action", &FcscCore::detectShelf, this);
+  detect_sandwich_server  = nh.advertiseService("detect_sandwich", &FcscCore::detectSandwich, this);
+  pickup_product_server   = nh.advertiseService("pickup_product", &FcscCore::pickupProduct, this);
+  place_product_server    = nh.advertiseService("place_product", &FcscCore::placeProduct, this);
+  return_product_server   = nh.advertiseService("return_product", &FcscCore::returnProduct, this);
+  pickup_sandwich_server  = nh.advertiseService("pickup_sandwich", &FcscCore::pickupSandwich, this);
+  faceup_sandwich_server  = nh.advertiseService("faceup_sandwich", &FcscCore::faceupSandwichV3, this);
+  faceup_standing_sandwiches_server  = nh.advertiseService("faceup_standing_sandwiches", &FcscCore::faceupSandwiches, this);
+  recover_sandwich_server = nh.advertiseService("recover_sandwich", &FcscCore::recoverSandwich, this);
+  detect_and_recover_sandwich_server = nh.advertiseService("detect_and_recover_sandwich", &FcscCore::detectAndRecoverSandwich, this);
+  gather_sandwiches_server = nh.advertiseService("gather_sandwiches", &FcscCore::gatherSandwiches, this);
+  adjust_sandwich_server = nh.advertiseService("adjust_sandwich", &FcscCore::adjustOrientationOfSandwich, this);
+  move_sandwich_free_space_server = nh.advertiseService("move_sandwich_to_free_space", &FcscCore::moveSandwichToFreeSpace, this);
+  move_initial_pose_server      = nh.advertiseService("move_initial_pose", &FcscCore::moveInitialPose, this);
+  goto_stocking_base_pos_server = nh.advertiseService("goto_stocking_base_position", &FcscCore::goToStockingBasePosition, this);
+  goto_faceup_base_pos_server   = nh.advertiseService("goto_faceup_base_position", &FcscCore::goToFaceupBasePosition, this);
+  goto_near_shelf_server        = nh.advertiseService("goto_near_shelf", &FcscCore::goToNearShelf, this);
+  goto_home_pos_server          = nh.advertiseService("goto_home_position", &FcscCore::goToHomePosition, this);
+  sort_sandwiches_server = nh.advertiseService("sort_sandwiches", &FcscCore::sortSandwiches, this);
+  sort_order_picking_sandwiches_server = nh.advertiseService("sort_order_picking_sandwiches", &FcscCore::sortOrderPickingSandwiches, this);
+  change_sandwich_pose_server = nh.advertiseService("change_sandwich_pose", &FcscCore::changeSandwichPose, this);
+  /***********************************************************************************/
+
+  display_trajectory_publisher      = nh.advertise<moveit_msgs::DisplayTrajectory>("/move_group/display_planned_path", 1, true);
+  enable_shelf_detection_publisher  = nh.advertise<std_msgs::Bool>("/shelf_detector/ar_track_alvar/enable_detection", 1, true);
+  enable_object_detection_publisher = nh.advertise<std_msgs::Bool>("/ar_track_alvar/enable_detection", 1, true);
+
+  trajectory_result_subscriber      = nh.subscribe("/execute_trajectory/result", 1, &FcscCore::trajectoryResultCB, this);
+  time_up_subscriber                = nh.subscribe("time_finish", 1, &FcscCore::timeUpCB, this);
+
+  planning_scene_client             = nh.serviceClient<moveit_msgs::GetPlanningScene>("get_planning_scene");
+  compute_ik_client                 = nh.serviceClient<moveit_msgs::GetPositionIK>("compute_ik");
+  detect_object_client              = nh.serviceClient<fcsc_msgs::DetectObject>("detect_object");
+  detect_shelf_client               = nh.serviceClient<fcsc_msgs::DetectObject>("detect_shelf");
+  link_attacher_client              = nh.serviceClient<gazebo_ros_link_attacher::Attach>("/link_attacher_node/attach");
+  link_detacher_client              = nh.serviceClient<gazebo_ros_link_attacher::Attach>("/link_attacher_node/detach");
+
+  check_picking_sandwich_server = nh.advertiseService("check_picking_sandwich", &FcscCore::checkPickingSandwich, this);
+
+  shelfB_board_name = "shelfB_board_2";
+  shelfB_name = "shelfB";
+
+  move_group.setPlannerId("RRTConnectkConfigDefault");
+  move_group.setMaxVelocityScalingFactor(normal_velocity);
+  attach_detach_type = "moveit";
+}
+
+void FcscCore::trajectoryResultCB(const moveit_msgs::ExecuteTrajectoryActionResult result_msg)
+{
+  is_executing_ = false;
+  result_msg.result.error_code.val == moveit_msgs::MoveItErrorCodes::SUCCESS ? is_succeeded_ = true : is_succeeded_ = false;
+  if (!is_succeeded_) {
+    ROS_ERROR("[trajectoryResultCB]:%s", getMoveItErrorCodeString(result_msg.result.error_code).c_str());
+  }
+}
+
+void FcscCore::timeUpCB(const std_msgs::Empty msg)
+{
+  ROS_WARN("timeUpCB");
+  timeup_ = true;
+  return;
+}
+
+bool FcscCore::checkPickingSandwich(fcsc_msgs::Manipulate::Request &req, fcsc_msgs::Manipulate::Response &res)
+{
+  geometry_msgs::PoseStamped pose_stmp_tmp;
+  std::vector<int> grasp_indices;
+
+  ROS_WARN("[checkPickingSandwich]%s is %s", req.object.name.c_str(), getObjectStateString(req.object).c_str());
+
+  move_group.setSupportSurfaceName(shelfB_name);
+
+  //把持姿勢のソート
+  sortSandwichGrasps(req.object.name, grasp_indices, fcsc_msgs::Manipulate::Request::RECOVER);
+
+  for (size_t i = 0; i < grasp_indices.size(); i++) {
+    asyncMoveArm(recover_pose_name);
+
+    product_grasps[SANDWICH].grasps[grasp_indices[i]].grasp_pose.header.frame_id = req.object.name;
+    product_grasps[SANDWICH].grasps[grasp_indices[i]].pre_grasp_approach.direction.header.frame_id = req.object.name;
+
+    ROS_WARN("[checkPickingSandwich]:%s", product_grasps[SANDWICH].grasps[grasp_indices[i]].id.c_str());
+
+    bool success = pickup(req.object.name, product_grasps[SANDWICH].grasps[grasp_indices[i]]);
+    if (!success) {
+      ROS_WARN("[checkPickingSandwich]:[%s] failed", product_grasps[SANDWICH].grasps[grasp_indices[i]].id.c_str());
+      // Stop();
+      continue;
+    }
+    ROS_WARN("[checkPickingSandwich]:[%s] success", product_grasps[SANDWICH].grasps[grasp_indices[i]].id.c_str());
+    // Stop();
+    releaseObject(req.object.name, 100);
+    transformPose(shelfB_board_name, req.object.pose, pose_stmp_tmp, listener);
+    fcsc_visual_tools.publishProduct(req.object.name, req.object.pose);
+  }
+  return (true);
+}
+
+/************************************* SMACH *************************************************/
+bool FcscCore::detectProduct(fcsc_msgs::DetectProduct::Request &req, fcsc_msgs::DetectProduct::Response &res)
+{
+  std::vector<std::string> object_names;
+  moveit::planning_interface::MoveGroupInterface::Plan plan;
+  fcsc_msgs::DetectObject detect_object_srv;
+  std::vector<geometry_msgs::PoseStamped> search_target_pose_v;
+  bool success;
+
+  // 偽の検出
+  // コンテナ内の物体配置をあらかじめ決めているときに使用
+  ROS_INFO("searchObject DAMY_DETECTION");
+
+  asyncMoveArm(container_center_pose_name);
+
+  detect_object_srv.request.detect = true;
+  detect_object_srv.request.visualize = true;
+  detect_object_srv.request.damy = true;
+  detect_object_client.call(detect_object_srv);
+  if (detect_object_srv.response.success == false) {
+    success = false;
+    return (true);
+  }
+
+  ROS_INFO("detect success");
+  int object_size = detect_object_srv.response.detected_object_array.objects.size();
+  for (int j = 0; j < object_size; j++) {
+    std::string object_name = detect_object_srv.response.detected_object_array.objects[j].name;
+
+    if (vectorFinder(object_names, object_name) >= 0) {
+      continue;
+    }
+
+    object_names.push_back(object_name);
+    res.detected_product_names.push_back(object_name);
+    res.detected_object_array.objects.push_back(detect_object_srv.response.detected_object_array.objects[j]);
+  }
+  success = true;
+
+  setProductPlacement(detect_object_srv.response.detected_object_array.objects);
+  return (true);
+}
+
+bool FcscCore::detectShelf(fcsc_msgs::DetectShelf::Request &req, fcsc_msgs::DetectShelf::Response &res)
+{
+  ros::Rate loop_rate(10);
+  fcsc_msgs::DetectObject detect_object_srv;
+  std_msgs::Bool bool_msg;
+
+  bool detect_success = false;
+
+  if (use_shelf_marker_detection_) {
+    // マーカ認識あり
+    // マーカー認識動作を実行
+    bool_msg.data = true;
+    for (size_t i = 0; i < 3; i++) {
+      enable_shelf_detection_publisher.publish(bool_msg);
+      loop_rate.sleep();
+    }
+
+    if (getCurrentEEfPose("base_footprint").pose.position.x < 0.4) {
+      asyncMoveArm("fold");
+    }
+
+    switch (req.pattern) {
+      case 0: {
+        // 正面
+        asyncMoveArm("search_shelf_A_board_2");
+        waitForExecute();
+        ros::WallDuration(3).sleep();
+
+        detect_object_srv.request.visualize = true;
+        detect_shelf_client.call(detect_object_srv);
+
+        double wrist_joint_value = move_group.getCurrentJointValues()[4];
+
+        for (size_t i = 0; i < detect_object_srv.response.detected_object_array.objects.size(); i++) {
+          std::cerr << detect_object_srv.response.detected_object_array.objects[i].name << '\n';
+          if (detect_object_srv.response.detected_object_array.objects[i].name == "shelfA") {
+            detect_success = true;
+            break;
+          }
+        }
+
+        for (size_t i = 0; i < 2 && !detect_success; i++) {
+          switch (i) {
+            case 0: move_group.setJointValueTarget("wrist_2_joint", wrist_joint_value - M_PI / 12.0); break;
+            case 1: move_group.setJointValueTarget("wrist_2_joint", wrist_joint_value + M_PI / 12.0); break;
+          }
+          planAndExecuteArm();
+          ros::WallDuration(3).sleep();
+          detect_object_srv.request.visualize = true;
+          detect_shelf_client.call(detect_object_srv);
+          for (size_t i = 0; i < detect_object_srv.response.detected_object_array.objects.size(); i++) {
+            std::cerr << detect_object_srv.response.detected_object_array.objects[i].name << '\n';
+            if (detect_object_srv.response.detected_object_array.objects[i].name == "shelfA") {
+              detect_success = true;
+              break;
+            }
+          }
+          if (detect_success) {
+            break;
+          }
+        }
+        break;
+      }
+      case 1: {
+        // 正面
+        asyncMoveArm("search_shelf_B_board_2");
+        waitForExecute();
+        // asyncMoveArm("search_shelf_2");
+        // moveArm("mayoko5");
+        ros::WallDuration(3).sleep();
+
+        detect_object_srv.request.visualize = true;
+        detect_shelf_client.call(detect_object_srv);
+
+        double wrist_joint_value = move_group.getCurrentJointValues()[4];
+
+        for (size_t i = 0; i < detect_object_srv.response.detected_object_array.objects.size(); i++) {
+          std::cerr << detect_object_srv.response.detected_object_array.objects[i].name << '\n';
+          if (detect_object_srv.response.detected_object_array.objects[i].name == "shelfB") {
+            detect_success = true;
+            break;
+          }
+        }
+
+        for (size_t i = 0; i < 2 && !detect_success; i++) {
+          switch (i) {
+            case 0: move_group.setJointValueTarget("wrist_2_joint", wrist_joint_value - M_PI / 8.0); break;
+            case 1: move_group.setJointValueTarget("wrist_2_joint", wrist_joint_value + M_PI / 8.0); break;
+          }
+          planAndExecuteArm();
+          ros::WallDuration(3).sleep();
+          detect_object_srv.request.visualize = true;
+          detect_shelf_client.call(detect_object_srv);
+          for (size_t i = 0; i < detect_object_srv.response.detected_object_array.objects.size(); i++) {
+            std::cerr << detect_object_srv.response.detected_object_array.objects[i].name << '\n';
+            if (detect_object_srv.response.detected_object_array.objects[i].name == "shelfB") {
+              detect_success = true;
+              break;
+            }
+          }
+          if (detect_success) {
+            break;
+          }
+        }
+        break;
+      }
+    }
+
+    moveArm(stock_pose_name);
+
+    bool_msg.data = false;
+    for (size_t i = 0; i < 3; i++) {
+      enable_shelf_detection_publisher.publish(bool_msg);
+      loop_rate.sleep();
+    }
+
+    if (!detect_success) {
+      ROS_ERROR("shelf detection error");
+      return (false);
+    }
+
+    ROS_WARN("shelf detect success");
+    for (int i = 0; i < detect_object_srv.response.detected_object_array.objects.size(); i++) {
+      fcsc_msgs::RecognizedObject obj = detect_object_srv.response.detected_object_array.objects[i];
+      ROS_WARN("%s", obj.name.c_str());
+      res.detected_shelf_names.push_back(obj.name);
+    }
+  } else {
+    // マーカー認識なし
+    // AI搬送車のvisual slamによる絶対座標系を利用
+    geometry_msgs::PoseStamped shelf_pose;
+    shelf_pose.header.frame_id = "map";
+
+    // shelfA
+    shelf_pose.pose.position.x = 1.7 + 0.435 / 2.0;
+    shelf_pose.pose.position.y = 1.55 - (1.92 - 0.95 / 2.0);
+    shelf_pose.pose.orientation.w = 1.0;
+    fcsc_visual_tools.publishShelfMultipleTanaita("shelfA", shelf_pose);
+
+    // shelfB
+    shelf_pose.pose.position.y = 1.55 - 0.95 / 2.0;
+    fcsc_visual_tools.publishShelfMultipleTanaita("shelfB", shelf_pose);
+  }
+
+
+  return (true);
+}
+
+bool FcscCore::detectSandwich(fcsc_msgs::DetectSandwich::Request &req, fcsc_msgs::DetectSandwich::Response &res)
+{
+  std::vector<std::string>                object_names;
+  std::vector<geometry_msgs::PoseStamped> search_target_pose_v;
+  fcsc_msgs::DetectObject                 detect_object_srv;
+  fcsc_msgs::EstimateSandwichPosition     estimate_sandwich_pos_srv;
+  moveit::planning_interface::MoveGroupInterface::Plan plan;
+  ros::Rate loop_rate(10);
+
+  waitForExecute();
+  robot_hand.move(100);
+  visual_tools->deleteAllMarkers();
+
+  // デモの場合は過去のサンドイッチの環境情報をparamから取得する
+  if (req.demo == true) {
+    double offset = 0.05;
+    random_sandwich_generator.setRegionFrame(shelfB_board_name);
+    random_sandwich_generator.setRegionRange(0+offset, shelf_depth-offset, 0+offset, shelf_width-offset);
+    random_sandwich_generator.generateSandwich(8, res.sandwiches);
+    for (size_t i = 0; i < res.sandwiches.size(); i++) {
+      for (int j = 0; j < scrap_sandwich_ids.size(); j++) {
+        if (res.sandwiches[i].name == ("sandwich_"+scrap_sandwich_ids[j])) {
+          res.sandwiches[i].scrap = true;
+          break;
+        }
+      }
+      fcsc_visual_tools.publishProduct(res.sandwiches[i].name, res.sandwiches[i].pose);
+    }
+    // detect_object_srv.request.damy = true;
+  } else {
+    for (size_t i = 0; i < 2; i++) {
+      std_msgs::Bool msg;
+      msg.data = true;
+      enable_object_detection_publisher.publish(msg);
+      loop_rate.sleep();
+    }
+  }
+
+  // 初期姿勢へ移動
+  if (getCurrentEEfPose("base_footprint").pose.position.x < 0.4) {
+    asyncMoveArm("fold");
+    asyncMoveArm(recover_pose_name);
+  }
+
+  geometry_msgs::PoseStamped ps_stamped;
+  geometry_msgs::PoseStamped target_pose;
+
+  double camera_y_offset = 0.0;
+
+  switch (req.pattern) {
+    case 0: {
+      // 左〜中心〜右　奥
+      ps_stamped.header.frame_id = shelfB_board_name;
+      ps_stamped.pose.position.x = 0.2;
+      ps_stamped.pose.position.y = shelf_width / 2.0 + camera_y_offset;
+      ps_stamped.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, M_PI/3.0, 0);
+      target_pose = getPoseStamped(ps_stamped, "camera_optical_center_line_link", "gripper_link", listener);
+      target_pose.pose.position.z = 0.15;
+      transformPose("base_footprint", target_pose, ps_stamped, listener);
+      target_pose = ps_stamped;
+      target_pose.pose.position.y = 0;
+      search_target_pose_v.push_back(target_pose);
+
+      // サンドイッチを検出するアームの目標手先位置を設定
+      // 左〜中心〜右　手前
+      ps_stamped.header.frame_id = shelfB_board_name;
+      ps_stamped.pose.position.x = -0.1;
+      ps_stamped.pose.position.y = shelf_width / 2.0 + 0.02 + camera_y_offset;
+      ps_stamped.pose.position.z = 0.2;
+      ps_stamped.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, M_PI/3.0, 0);
+      transformPose("base_footprint", target_pose, ps_stamped, listener);
+      target_pose = ps_stamped;
+      target_pose.pose.position.y = 0;
+      search_target_pose_v.push_back(target_pose);
+      break;
+    }
+    case 1: {
+      // サンドイッチを検出するアームの目標手先位置を設定
+      // 左〜中心〜右　手前
+      ps_stamped.header.frame_id = shelfB_board_name;
+      ps_stamped.pose.position.x = 0.0;
+      ps_stamped.pose.position.y = shelf_width / 2.0 + camera_y_offset;
+      ps_stamped.pose.position.z = 0.3;
+      ps_stamped.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, M_PI/2.0, 0);
+      transformPose("base_footprint", ps_stamped, target_pose, listener);
+      target_pose.pose.position.y = 0;
+      search_target_pose_v.push_back(target_pose);
+      break;
+    }
+    case 2: {
+      // サンドイッチを検出するアームの目標手先位置を設定
+      // 左〜中心〜右　手前
+      ps_stamped.header.frame_id = shelfB_board_name;
+      ps_stamped.pose.position.x = 0.0;
+      ps_stamped.pose.position.y = shelf_width / 2.0 + camera_y_offset;
+      ps_stamped.pose.position.z = 0.2;
+      ps_stamped.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, M_PI/3.0, 0);
+      transformPose("base_footprint", ps_stamped, target_pose, listener);
+      target_pose.pose.position.y = 0;
+      search_target_pose_v.push_back(target_pose);
+      break;
+    }
+    case 3: {
+      // 左〜中心〜右　奥
+      ps_stamped.header.frame_id = shelfB_board_name;
+      ps_stamped.pose.position.x = 0.2;
+      ps_stamped.pose.position.y = shelf_width / 2.0 + camera_y_offset;
+      ps_stamped.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, M_PI/2.0, 0);
+      target_pose = getPoseStamped(ps_stamped, "camera_optical_center_line_link", "gripper_link", listener);
+      target_pose.pose.position.z = 0.2;
+      transformPose("base_footprint", target_pose, ps_stamped, listener);
+      target_pose = ps_stamped;
+      target_pose.pose.position.y = 0;
+      search_target_pose_v.push_back(target_pose);
+      break;
+    }
+    case 4: {
+      // 左〜中心〜右　奥
+      ps_stamped.header.frame_id = shelfB_board_name;
+      ps_stamped.pose.position.x = 0.15;
+      ps_stamped.pose.position.y = shelf_width / 2.0 + camera_y_offset;
+      ps_stamped.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, M_PI/3.0, 0);
+      target_pose = getPoseStamped(ps_stamped, "camera_optical_center_line_link", "gripper_link", listener);
+      target_pose.pose.position.z = 0.15;
+      transformPose("base_footprint", target_pose, ps_stamped, listener);
+      target_pose = ps_stamped;
+      target_pose.pose.position.y = 0;
+      search_target_pose_v.push_back(target_pose);
+      break;
+    }
+   }
+
+
+  detect_object_srv.request.detect = true;
+  detect_object_srv.request.visualize = false;
+
+  move_group.setMaxVelocityScalingFactor(max_velocity);
+
+  // 検出動作を実行
+  for (int i = 0; i < search_target_pose_v.size(); i++) {
+    double wrist_joint_value;
+    for (size_t j = 0; j < 3; j++) {
+      ROS_INFO("search [%d]", i);
+
+      bool success;
+
+      if (req.demo) {
+        success = true;
+      } else {
+        switch (j) {
+          case 0:
+            success = moveArm(search_target_pose_v[i]);
+            wrist_joint_value = move_group.getCurrentJointValues()[4];
+            break;
+          case 1:
+            move_group.setJointValueTarget("wrist_2_joint", wrist_joint_value + M_PI / 6);
+            success = (bool)planAndExecuteArm();
+            break;
+          case 2:
+            move_group.setJointValueTarget("wrist_2_joint", wrist_joint_value - M_PI / 6);
+            success = (bool)planAndExecuteArm();
+            break;
+        }
+      }
+
+      if (!success) {
+        break;
+      }
+
+      if (!req.demo) {
+        ros::Duration(3.0).sleep();
+      }
+
+      detect_object_client.call(detect_object_srv);
+      if (detect_object_srv.response.success == false) {
+        ROS_INFO("Not detected sandwich");
+        continue;
+      }
+
+      // 検出したサンドイッチをresponseに格納
+      ROS_INFO("Detected sandwich");
+      int object_size = detect_object_srv.response.detected_object_array.objects.size();
+      for (int j = 0; j < object_size; j++) {
+        std::string object_name = detect_object_srv.response.detected_object_array.objects[j].name;
+
+        // サンドイッチ以外は無視
+        if (object_name.find("sandwich") == std::string::npos) {
+          continue;
+        }
+
+        // 検出済みのサンドイッチは無視
+        if (vectorFinder(object_names, object_name) >= 0) {
+          continue;
+        }
+
+        object_names.push_back(object_name);
+        res.sandwiches.push_back(detect_object_srv.response.detected_object_array.objects[j]);
+      }
+    }
+  }
+
+  for (size_t i = 0; i < 2; i++) {
+    std_msgs::Bool msg;
+    msg.data = false;
+    enable_object_detection_publisher.publish(msg);
+    loop_rate.sleep();
+  }
+
+  move_group.setMaxVelocityScalingFactor(normal_velocity);
+  // asyncMoveArm(recover_pose_name);
+
+  if (res.sandwiches.size() > 0) {
+    ROS_INFO("visualize objects");
+    detect_object_srv.request.detect = false;
+    detect_object_srv.request.visualize = true;
+    detect_object_client.call(detect_object_srv);
+  } else {
+    ROS_ERROR("Not detected sandwich");
+  }
+
+
+  return (true);
+}
+
+// 把持姿勢を並び替える
+// 現在の手先の姿勢から回転が少ない姿勢を優先させる
+// 手先の回転はYaw角のみ考慮
+void FcscCore::sortGraspPoseIndex(ProductType type, std::string object_name ,std::vector<int> &grasp_indices)
+{
+  std::vector<ass_arr> grasp_cost_map;
+  double r, p, y;
+  geometry_msgs::PoseStamped pin;
+  geometry_msgs::PoseStamped pout;
+
+  grasp_indices.resize(product_grasps[type].grasps.size());
+
+  // 手首回転（container座標系のx軸周りの回転）が少ない姿勢を優先するようにする
+  for (int i = 0; i < product_grasps[type].grasps.size(); i++) {
+    pin = product_grasps[type].grasps[i].grasp_pose;
+    pin.header.frame_id = object_name;
+    transformPose("base_footprint", pin, pout, listener);
+    // transformPose("container", pin, pout);
+    getRPYFromQuaternion(pout.pose.orientation, r, p, y);
+    if (r < 0) r *= -1.0;
+    r = fmod(r, 2.0 * M_PI);
+    // 値を 0 ~ M_PI の範囲に収める
+    if (r > M_PI) r -= 2.0 * (r - M_PI);
+    grasp_cost_map.push_back( ass_arr(i, r) );
+  }
+
+  // 昇順でソート
+  sort(grasp_cost_map.begin(), grasp_cost_map.end(), sort_less);
+
+  int loop = 0;
+  for (std::vector<ass_arr>::iterator it = grasp_cost_map.begin(); it != grasp_cost_map.end(); it++) {
+    grasp_indices[loop++] = it->first;
+  }
+}
+
+bool FcscCore::pickup(std::string object_name, fcsc_msgs::Grasp grasp, const moveit_msgs::Constraints& constraints, bool check_ik)
+{
+  geometry_msgs::PoseArray    waypoints;
+  geometry_msgs::Pose         waypoint;
+  geometry_msgs::PoseStamped  visualize_pose;
+  geometry_msgs::PoseStamped  pin;
+  geometry_msgs::PoseStamped  pout;
+  geometry_msgs::Vector3      vec;
+  double                      norm;
+  robot_state::RobotState     robot_state(planning_scene_monitor.getPlanningScene()->getCurrentStateNonConst());
+  moveit_msgs::RobotState     robot_state_msg;
+  double                      ee_joint_position = robot_hand.posToJoint(grasp.pre_grasp_posture.points[0].positions[0]);
+  bool                        success;
+
+  // 把持姿勢の描画
+  transformPose(visual_frame_id_, grasp.grasp_pose, visualize_pose, listener);
+  visual_tools->publishArrow(visualize_pose.pose, rviz_visual_tools::GREEN);
+  visual_tools->trigger();
+
+  // 逆運動学で把持姿勢の確認
+  if (check_ik) {
+    robot_state.setJointGroupPositions(move_group.getName(), start_joint_group_positions_);
+    robot_state.setVariablePosition("bottom_ezgripper_knuckle_palm_L1_1", ee_joint_position);
+    robot_state.setVariablePosition("bottom_ezgripper_knuckle_palm_L1_2", ee_joint_position);
+    robot_state.setVariablePosition("top_ezgripper_knuckle_palm_L1_1", ee_joint_position);
+    robot_state.setVariablePosition("top_ezgripper_knuckle_palm_L1_2", ee_joint_position);
+    moveit::core::robotStateToRobotStateMsg(robot_state, robot_state_msg);
+    success = computeIK(grasp.grasp_pose, robot_state_msg);
+    if (!success) {
+      ROS_ERROR("[pickup]:IK failed");
+      return (false);
+    }
+  }
+
+  // ハンド調節
+  waitForExecute();
+  robot_hand.move(grasp.pre_grasp_posture.points[0].positions[0]);
+
+  // 手前へ近づく
+  // pre_grasp_approach と desired_distance で手先位置・姿勢を設定
+  pin = grasp.grasp_pose;
+  transformPose(grasp.pre_grasp_approach.direction.header.frame_id, pin, pout, listener);
+
+  vec = grasp.pre_grasp_approach.direction.vector;
+  norm = sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z);
+
+  pout.pose.position.x -= grasp.pre_grasp_approach.desired_distance * vec.x / norm;
+  pout.pose.position.y -= grasp.pre_grasp_approach.desired_distance * vec.y / norm;
+  pout.pose.position.z -= grasp.pre_grasp_approach.desired_distance * vec.z / norm;
+
+  move_group.setPathConstraints(constraints);
+  success = moveArm(pout);
+  move_group.clearPathConstraints();
+  if (!success) {
+    ROS_ERROR("[pickup]:moveArm failed");
+    return (false);
+  }
+
+  // アプローチ
+  waypoints.poses.clear();
+  waypoints.header.frame_id = grasp.grasp_pose.header.frame_id;
+  waypoints.poses.push_back(grasp.grasp_pose.pose);
+  ROS_WARN("[pickup]:approach");
+  for (size_t i = 0; i < 5; i++) {
+    move_group.setMaxVelocityScalingFactor(min_velocity);
+    success = moveArmCartesianPath(waypoints.header.frame_id, waypoints.poses, 0.01, 0.0, false);
+    if (!success) {
+      ROS_ERROR("[pickup]:Approach plan failed");
+      move_group.setMaxVelocityScalingFactor(normal_velocity);
+      return (false);
+    }
+    move_group.setMaxVelocityScalingFactor(normal_velocity);
+    if (!waitForExecute()) {
+      success = false;
+      continue;
+    }
+    success = true;
+    break;
+  }
+  if (!success) {
+    ROS_ERROR("[pickup]:Approach execution failed");
+    return (false);
+  }
+
+  // 掴む
+  graspObject(object_name, grasp.grasp_posture.points[0].positions[0], grasp.grasp_posture.points[0].effort[0], grasp.ezgripper_control);
+
+  // 退避
+  pout = getCurrentEEfPose(grasp.post_grasp_retreat.direction.header.frame_id);
+
+  vec = grasp.post_grasp_retreat.direction.vector;
+  norm = sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z);
+
+  pout.pose.position.x += grasp.post_grasp_retreat.desired_distance * vec.x / norm;
+  pout.pose.position.y += grasp.post_grasp_retreat.desired_distance * vec.y / norm;
+  pout.pose.position.z += grasp.post_grasp_retreat.desired_distance * vec.z / norm;
+
+  waypoints.poses.clear();
+  waypoints.header.frame_id = pout.header.frame_id;
+  waypoints.poses.push_back(pout.pose);
+  ROS_WARN("[pickup]:retreat");
+  moveArmCartesianPath(waypoints.header.frame_id, waypoints.poses, 0.01, 0.0, false);
+
+  return (true);
+}
+
+bool FcscCore::place(std::string object_name, moveit_msgs::PlaceLocation location, const moveit_msgs::Constraints& constraint)
+{
+  moveit::planning_interface::MoveGroupInterface::Plan plan;
+  geometry_msgs::PoseArray    waypoints;
+  geometry_msgs::Pose         waypoint;
+  geometry_msgs::PoseStamped  pin;
+  geometry_msgs::PoseStamped  pout;
+  geometry_msgs::PoseStamped  place_ee_pose;
+  geometry_msgs::Vector3      vec;
+  double                      norm;
+
+  // 物体の配置場所から目標手先位置設定
+  place_ee_pose = getTargetPlacePoseFromObject(object_name, location.place_pose);
+
+  // 逆運動学で姿勢の確認
+  bool success = computeIK(place_ee_pose, false);
+  if (!success) {
+    ROS_ERROR("[place]:ik failed");
+    return (false);
+  }
+
+  // 手前へ近づく
+  // pre_grasp_approach と desired_distance で手先位置・姿勢を設定
+  pin = place_ee_pose;
+  transformPose(location.pre_place_approach.direction.header.frame_id, pin, pout, listener);
+
+  vec = location.pre_place_approach.direction.vector;
+  norm = sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z);
+
+  pout.pose.position.x -= location.pre_place_approach.desired_distance * vec.x / norm;
+  pout.pose.position.y -= location.pre_place_approach.desired_distance * vec.y / norm;
+  pout.pose.position.z -= location.pre_place_approach.desired_distance * vec.z / norm;
+
+  ROS_WARN("[place]:move");
+
+  // move_group.setPlannerId("RRTstarkConfigDefault");
+  // move_group.setPlanningTime(30);
+
+  // 制約設定
+  move_group.setPathConstraints(constraint);
+
+  setStartState();
+
+  if (!setTargetPose(pout)) {
+    move_group.clearPathConstraints();
+    // move_group.setPlannerId("RRTConnectkConfigDefault");
+    // move_group.setPlanningTime(5);
+    ROS_ERROR("[place] setTargetPose");
+    return (false);
+  }
+
+  if (!asyncPlanArm(plan)) {
+  // if (!asyncPlanArm(plan, 1)) {
+    move_group.clearPathConstraints();
+    // move_group.setPlannerId("RRTConnectkConfigDefault");
+    // move_group.setPlanningTime(5);
+    ROS_ERROR("[place] asyncPlanArm");
+    return (false);
+  }
+
+  // 軌道が制約を満たしているかチェック
+  bool is_path_valid = planning_scene_monitor.getPlanningScene()->isPathValid(plan.start_state_, plan.trajectory_, constraint);
+
+  if (!is_path_valid) {
+    ROS_WARN("Trajectory is invalid");
+    Stop(stop);
+  }
+
+  if (!executeArm(plan)) {
+    move_group.clearPathConstraints();
+    // move_group.setPlannerId("RRTConnectkConfigDefault");
+    // move_group.setPlanningTime(5);
+    ROS_ERROR("[place] executeArm");
+    return (false);
+  }
+
+  move_group.clearPathConstraints();
+
+  // アプローチ
+  move_group.setMaxVelocityScalingFactor(min_velocity);
+  waypoints.poses.clear();
+  waypoints.header.frame_id = place_ee_pose.header.frame_id;
+  waypoints.poses.push_back(place_ee_pose.pose);
+  ROS_WARN("[place]:approach");
+  moveArmCartesianPath(waypoints.header.frame_id, waypoints.poses, 0.01, 0.0, false);
+  move_group.setMaxVelocityScalingFactor(normal_velocity);
+
+  // 離す
+  releaseObject(object_name, location.post_place_posture.points[0].positions[0], location.post_place_posture.points[0].effort[0]);
+
+  // 退避
+  pout = getCurrentEEfPose(location.post_place_retreat.direction.header.frame_id);
+
+  vec = location.post_place_retreat.direction.vector;
+  norm = sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z);
+
+  pout.pose.position.x += location.post_place_retreat.desired_distance * vec.x / norm;
+  pout.pose.position.y += location.post_place_retreat.desired_distance * vec.y / norm;
+  pout.pose.position.z += location.post_place_retreat.desired_distance * vec.z / norm;
+
+  waypoints.poses.clear();
+  waypoints.header.frame_id = pout.header.frame_id;
+  waypoints.poses.push_back(pout.pose);
+  ROS_WARN("[place]:retreat");
+  moveArmCartesianPath(waypoints.header.frame_id, waypoints.poses, 0.01, 0.0, false);
+
+  return (true);
+}
+
+bool FcscCore::pickupProduct(fcsc_msgs::Manipulate::Request &req, fcsc_msgs::Manipulate::Response &res)
+{
+  geometry_msgs::PoseStamped        current_pose_stamped;
+  std::vector<geometry_msgs::Pose>  waypoints;
+  geometry_msgs::Pose               waypoint;
+  string                            object_name;
+  ProductType                       product_type;
+  std::vector<int>                  grasp_indices;
+  bool                              success;
+  std::vector<int>                  *product_placement_indices = NULL;
+  int                               product_type_index;
+  int                               product_placement_index;
+  static bool                       is_lift_upped = false;
+
+  ROS_INFO("[pickupProduct]:pickup [%s]", req.object.name.c_str());
+
+  object_name = req.object.name;
+
+  //物体の種類を設定
+  if (object_name.find("onigiri") != std::string::npos) {
+    product_type = ONIGIRI;
+    product_placement_indices = &onigiri_placement_index;
+    product_type_index = 4;
+  } else if (object_name.find("drink") != std::string::npos) {
+    product_type = DRINK;
+    product_placement_indices = &drink_placement_index;
+    product_type_index = 2;
+  } else if (object_name.find("bento") != std::string::npos) {
+    product_type = BENTO;
+    product_placement_indices = &bento_placement_index;
+    product_type_index = 0;
+  } else {
+    ROS_ERROR("[pickupProduct]No such a product name");
+    res.success = false;
+    return (true);
+  }
+
+  if (object_name.find("_A_") != std::string::npos) {
+    product_placement_index = (*product_placement_indices)[0];
+  } else if (object_name.find("_B_") != std::string::npos){
+    product_placement_index = (*product_placement_indices)[1];
+    ++product_type_index;
+  } else {
+    ROS_ERROR("[pickupProduct]No such a type");
+    res.success = false;
+    return (true);
+  }
+
+  if (product_placement_index >= object_placements[product_type_index].placements.size()) {
+    ROS_ERROR("[pickupProduct]There is NO product location");
+    res.success = false;
+    return (true);
+  }
+
+  // move_group.setSupportSurfaceName("container");
+
+  move_group.setMaxVelocityScalingFactor(max_velocity);
+  asyncMoveArm(container_center_pose_name);
+  move_group.setMaxVelocityScalingFactor(normal_velocity);
+
+  // おにぎり、ドリンクを陳列するときは台車を上げる
+  // if (!is_lift_upped && (product_type == ONIGIRI || product_type == DRINK)) {
+  //   waitForExecute();
+  //   // mobile_robot.moveBoard(0.09);
+  //
+  //   // コンテナ内の商品がロボットにめり込んでいるので、再度描画する
+  //   fcsc_msgs::DetectObject detect_object_srv;
+  //   detect_object_srv.request.detect = false;
+  //   detect_object_srv.request.visualize = true;
+  //   detect_object_client.call(detect_object_srv);
+  //
+  //   is_lift_upped = true;
+  // }
+
+  sortGraspPoseIndex(product_type, object_name, grasp_indices);
+
+  res.success = false;
+  for (size_t i = 0; i < grasp_indices.size(); i++) {
+    product_grasps[product_type].grasps[ grasp_indices[i] ].grasp_pose.header.frame_id = object_name;
+    product_grasps[product_type].grasps[ grasp_indices[i] ].pre_grasp_approach.direction.header.frame_id = object_name;
+    bool success = pickup(object_name, product_grasps[product_type].grasps[ grasp_indices[i] ], moveit_msgs::Constraints(), false);
+    if (success) {
+      res.success = true;
+      break;
+    }
+  }
+
+  // asyncMoveArm(container_center_pose_name);
+
+  return (true);
+}
+
+bool FcscCore::placeProduct(fcsc_msgs::Manipulate::Request &req, fcsc_msgs::Manipulate::Response &res)
+{
+  moveit::planning_interface::MoveGroupInterface::Plan plan;
+  ProductType        product_type;
+  std::vector<int>  *product_placement_indices = NULL;
+  int               *product_placement_index = NULL;
+  int               product_type_index;
+  bool    success = false;
+  std::string shelf_board_name;
+  std::string mesh_path;
+  std::string return_pose_name;
+  moveit_msgs::Constraints constraint;
+  std::vector<moveit_msgs::PlaceLocation> locations;
+  fcsc_msgs::DetectObject detect_object_srv;
+
+  ROS_WARN("[placeObject] %s", req.object.name.c_str());
+  move_group.setSupportSurfaceName("shelfA");
+
+  // 陳列商品ごとに変数設定
+  switch (req.object.type) {
+    case fcsc_msgs::RecognizedObject::ONIGIRI: {
+      product_type = ONIGIRI;
+      mesh_path = "package://fcsc_description/mesh/onigiri_edit.stl";
+      return_pose_name = "onigiri_return_pose";
+      product_placement_indices = &onigiri_placement_index;
+      product_type_index = 4;
+      break;
+    }
+    case fcsc_msgs::RecognizedObject::DRINK: {
+      product_type = DRINK;
+      mesh_path = "package://fcsc_description/mesh/drink_edit.stl";
+      return_pose_name = "masita4";
+      product_placement_indices = &drink_placement_index;
+      product_type_index = 2;
+      break;
+    }
+    case fcsc_msgs::RecognizedObject::BENTO: {
+      product_type = BENTO;
+      mesh_path = "package://fcsc_description/mesh/bento_edit.stl";
+      return_pose_name = stock_pose_name;
+      product_placement_indices = &bento_placement_index;
+      product_type_index = 0;
+      break;
+    }
+  }
+
+  // 陳列商品の種類（A/B）ごとに配置場所のインデックスを設定
+  if (req.object.name.find("_A_") != std::string::npos) {
+    product_placement_index = &((*product_placement_indices)[0]);
+  } else if (req.object.name.find("_B_") != std::string::npos) {
+    product_placement_index = &((*product_placement_indices)[1]);
+    ++product_type_index ;
+  } else {
+    ROS_ERROR("[placeProduct]No such a type");
+    res.success = false;
+    return (true);
+  }
+
+  // 陳列商品の配置場所があるか確認
+  if (*product_placement_index >= object_placements[product_type_index].placements.size()) {
+    ROS_ERROR("[placeProduct]:There is NO product location");
+    res.success = false;
+    return (true);
+  }
+
+  // 商品陳列時の手先姿勢を設定
+  grasp_planner.generateLocationPose(req.object.name, stocking_area[product_type].child_frame_id, &locations);
+  shelf_board_name = stocking_area[product_type].parent_frame_id;
+
+  // 手先をなるべく真下に向けた状態のまま商品を置くための制約
+  if (product_type == DRINK || product_type == BENTO) {
+    constraint.orientation_constraints.resize(1);
+    constraint.orientation_constraints[0].header.frame_id = move_group.getCurrentPose().header.frame_id;
+    constraint.orientation_constraints[0].orientation = move_group.getCurrentPose().pose.orientation;
+    constraint.orientation_constraints[0].link_name = move_group.getEndEffectorLink();
+    // 手先リンク座標系(gripper_link)基準のトレランス
+    // x軸は手首のyaw回転
+    constraint.orientation_constraints[0].absolute_x_axis_tolerance = M_PI;
+    constraint.orientation_constraints[0].absolute_y_axis_tolerance = M_PI / 6;
+    constraint.orientation_constraints[0].absolute_z_axis_tolerance = M_PI / 6;
+    constraint.orientation_constraints[0].weight = 1.0;
+
+    constraint.joint_constraints.resize(1);
+    constraint.joint_constraints[0].joint_name = "shoulder_pan_joint";
+    constraint.joint_constraints[0].position = move_group.getCurrentJointValues()[0];
+    constraint.joint_constraints[0].tolerance_above = 100;
+    constraint.joint_constraints[0].tolerance_below = 0;
+    constraint.joint_constraints[0].weight = 1.0;
+  } else {
+    // constraint.joint_constraints.resize(2);
+    // constraint.joint_constraints[0].joint_name = "wrist_1_joint";
+    // constraint.joint_constraints[0].position = 2.0 * M_PI;
+    // constraint.joint_constraints[0].tolerance_above = 0;
+    // constraint.joint_constraints[0].tolerance_below = constraint.joint_constraints[0].position - M_PI;
+    // constraint.joint_constraints[0].weight = 1.0;
+    //
+    // constraint.joint_constraints[1].joint_name = "shoulder_pan_joint";
+    // constraint.joint_constraints[1].position = move_group.getCurrentJointValues()[0] + 10.0 * M_PI / 180.0;
+    // constraint.joint_constraints[1].tolerance_above = 100;
+    // constraint.joint_constraints[1].tolerance_below = 0;
+    // constraint.joint_constraints[1].weight = 1.0;
+  }
+
+  if (product_type != ONIGIRI) {
+    move_group.setNamedTarget(stock_pose_name);
+  } else {
+    asyncMoveArm("fold");
+    move_group.setNamedTarget("onigiri_pose");
+  }
+
+  if (!asyncPlanArm(plan, 3)) {
+    // move_group.setPlannerId("RRTConnectkConfigDefault");
+    // move_group.setPlanningTime(5);
+    res.success = false;
+    return (true);
+  }
+
+  if (!asyncExecuteArm(plan)) {
+    // move_group.setPlannerId("RRTConnectkConfigDefault");
+    // move_group.setPlanningTime(5);
+    res.success = false;
+    return (true);
+  }
+
+  // 棚の手前に移動
+  switch (product_type) {
+    case DRINK: {
+      geometry_msgs::PoseStamped target_pose;
+      target_pose.header.frame_id = shelf_board_name;
+      target_pose.pose.position.x = -0.1;
+      target_pose.pose.position.y = shelf_width / 2.0;
+      target_pose.pose.position.z = 0.1;
+      target_pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, M_PI / 2.0, 0);
+      setStartState();
+      asyncMoveArm(target_pose, 3);
+      break;
+    }
+    case ONIGIRI: {
+      geometry_msgs::PoseStamped target_pose;
+      target_pose.header.frame_id = shelf_board_name;
+      target_pose.pose.position.x = -0.3;
+      target_pose.pose.position.y = shelf_width / 2.0;
+      target_pose.pose.position.z = 0.3;
+      target_pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, -M_PI / 3, 0);
+      target_pose = getPoseStamped(target_pose, "gripper_wrap_link", "gripper_link", listener);
+      setStartState();
+      asyncMoveArm(target_pose, 3);
+      break;
+    }
+    case BENTO: {
+      geometry_msgs::PoseStamped target_pose;
+      target_pose.header.frame_id = shelf_board_name;
+      target_pose.pose.position.x = -0.15;
+      target_pose.pose.position.y = shelf_width / 2.0;
+      target_pose.pose.position.z = 0.2;
+      target_pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, M_PI / 2.0, 0);
+      setStartState();
+      asyncMoveArm(target_pose, 3);
+      break;
+    }
+  }
+
+  success = false;
+  while (*product_placement_index < object_placements[product_type_index].placements.size()) {
+    ROS_WARN("name:%s placement_index:%d", req.object.name.c_str(), *product_placement_index);
+    for (size_t i = 0; i < locations.size(); i++) {
+      locations[i].place_pose.pose.position = object_placements[product_type_index].placements[*product_placement_index].pose.position;
+
+      if (product_type == BENTO && locations[i].id == "tilt") {
+        locations[i].place_pose.pose.position.z += 0.05;
+      }
+
+      geometry_msgs::PoseStamped pout;
+      transformPose(visual_frame_id_, locations[i].place_pose, pout, listener);
+      if (visual_tools->publishMesh(pout.pose, mesh_path, rviz_visual_tools::BLUE)) {
+        visual_tools->trigger();
+      }
+
+      success = place(req.object.name, locations[i], constraint);
+      if (!success) {
+        // Stop();
+        continue;
+      }
+
+      switch (product_type) {
+        case BENTO: {
+          locations[i].place_pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, 0, 0);
+          // locations[i].place_pose.pose.position.z -= 0.05 / 2.0;
+          // fcsc_visual_tools.publishProduct(req.object.name, locations[i].place_pose);
+          fcsc_visual_tools.contactProduct(req.object.name, "bento", locations[i].place_pose, *product_placement_index);
+          break;
+        }
+        case DRINK: {
+          locations[i].place_pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, 0, 0);
+          fcsc_visual_tools.contactProduct(req.object.name, shelf_board_name, locations[i].place_pose);
+          break;
+        }
+        case ONIGIRI: {
+          locations[i].place_pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, 0, -M_PI/2);
+          fcsc_visual_tools.contactProduct(req.object.name, shelf_board_name, locations[i].place_pose);
+          break;
+        }
+      }
+
+      res.success = true;
+
+      ++(*product_placement_index);
+      detect_object_srv.request.delete_object_names.push_back(req.object.name);
+      detect_object_client.call(detect_object_srv);
+
+      asyncMoveArm(return_pose_name);
+      move_group.setMaxVelocityScalingFactor(max_velocity);
+      asyncMoveArm(stock_pose_name);
+      asyncMoveArm("fold");
+      move_group.setMaxVelocityScalingFactor(normal_velocity);
+
+
+      return (true);
+    }
+    ++(*product_placement_index);
+  }
+
+  res.success = false;
+
+  releaseObject(req.object.name, 100);
+  fcsc_visual_tools.deleteObject(req.object.name);
+  detect_object_srv.request.delete_object_names.push_back(req.object.name);
+  detect_object_client.call(detect_object_srv);
+  asyncMoveArm(stock_pose_name);
+  asyncMoveArm("fold");
+
+  return (true);
+}
+
+bool FcscCore::returnProduct(fcsc_msgs::Manipulate::Request &req, fcsc_msgs::Manipulate::Response &res)
+{
+  res.success = returnObjectToContainer(req.object);
+  return (true);
+}
+
+bool FcscCore::pickupSandwich(fcsc_msgs::Manipulate::Request &req, fcsc_msgs::Manipulate::Response &res)
+{
+
+  geometry_msgs::PoseStamped pose_stmp_tmp;
+  int first_index, last_index;
+  int faceup_success_count = 0;
+  int sandwich_size;
+  bool is_scrap;
+  std::vector<int> grasp_indices;
+
+  ROS_WARN("[pickupSandwich]%s is %s", req.object.name.c_str(), getObjectStateString(req.object).c_str());
+
+  move_group.setSupportSurfaceName(shelfB_name);
+
+  res.success = false;
+
+  asyncMoveArm(recover_pose_name);
+
+  res.success = false;
+
+  //把持姿勢のソート
+  sortSandwichGrasps(req.object.name, grasp_indices, req.manipulation_type);
+
+  for (size_t i = 0; i < grasp_indices.size(); i++) {
+
+    product_grasps[SANDWICH].grasps[grasp_indices[i]].grasp_pose.header.frame_id = req.object.name;
+    product_grasps[SANDWICH].grasps[grasp_indices[i]].pre_grasp_approach.direction.header.frame_id = req.object.name;
+
+    ROS_WARN("[pickupSandwich]:%s", product_grasps[SANDWICH].grasps[grasp_indices[i]].id.c_str());
+
+    bool success = pickup(req.object.name, product_grasps[SANDWICH].grasps[grasp_indices[i]]);
+    if (success) {
+      res.success = true;
+      break;
+    }
+
+  }
+  return (true);
+}
+
+bool FcscCore::recoverSandwich(fcsc_msgs::Manipulate::Request &req, fcsc_msgs::Manipulate::Response &res)
+{
+  fcsc_msgs::DetectObject detect_object_srv;
+  geometry_msgs::PoseStamped waypoint_stamped;
+
+  asyncMoveArm(recover_pose_name);
+
+  move_group.setMaxVelocityScalingFactor(max_velocity);
+
+  asyncMoveArm("fold");
+
+  // 廃棄品のサンドイッチが棚にぶつかっても問題はない
+  // したがって、あらかじめ掴んだサンドイッチをRviz上から消しておく
+  detachObject(req.object.name, attach_detach_type);
+  fcsc_visual_tools.deleteObject(req.object.name);
+  detect_object_srv.request.delete_object_names.push_back(req.object.name);
+  detect_object_client.call(detect_object_srv);
+
+  // コンテナ上へ持っていく
+  ROS_INFO("[recoverObject]:Take [%s] to container", req.object.name.c_str());
+  asyncMoveArm(container_center_pose_name);
+
+  //サンドイッチを離す
+  ROS_INFO("[faceUpObject]:Release [%s]", req.object.name.c_str());
+  waitForExecute();
+  robot_hand.move(30);
+
+  asyncMoveArm("fold");
+
+  move_group.setMaxVelocityScalingFactor(normal_velocity);
+  asyncMoveArm(recover_pose_name);
+
+  res.success = true;
+
+
+  return (true);
+}
+
+struct ScrapSandwichInfo {
+  std::string name;
+  bool detected;
+  bool recoverd;
+  int picking_count;
+};
+
+bool FcscCore::detectAndRecoverSandwich(fcsc_msgs::DetectAndRecoverSandwich::Request &req, fcsc_msgs::DetectAndRecoverSandwich::Response &res)
+{
+  // 手前側認識動作でサンドイッチ認識開始
+  int detect_pattern = 1;
+  int max_detect_pattern = 4;
+
+  std::vector<ScrapSandwichInfo> scrap_sandwich_infos(scrap_sandwich_ids.size());
+
+  // 廃棄サンドイッチの情報を初期化
+  for (size_t i = 0; i < scrap_sandwich_ids.size(); i++) {
+    scrap_sandwich_infos[i].name = "sandwich_" + scrap_sandwich_ids[i];
+    scrap_sandwich_infos[i].picking_count = 0;
+  }
+
+  while (1) {
+    fcsc_msgs::DetectObject detect_object_srv;
+
+    // 1.サンドイッチ認識動作
+    fcsc_msgs::DetectSandwich detect_sandwich_srv;
+    detect_sandwich_srv.request.pattern = detect_pattern;
+    // detect_sandwich_srv.request.demo = true;
+    ROS_WARN("[detectAndRecoverSandwich]:detectSandwich");
+    detectSandwich(detect_sandwich_srv.request, detect_sandwich_srv.response);
+
+    // 2.認識した廃棄サンドイッチをvectorの先頭にまとめる
+    fcsc_msgs::SortSandwiches sort_sandwiches_srv;
+    sort_sandwiches_srv.request.sandwiches = detect_sandwich_srv.response.sandwiches;
+    sortSandwiches(sort_sandwiches_srv.request, sort_sandwiches_srv.response);
+
+    // 通常のサンドイッチをレスポンスに格納しておく
+    for (size_t i = 0; i < sort_sandwiches_srv.response.normal_sandwiches.size(); i++) {
+      int normal_index = -1;
+      for (size_t j = 0; j < res.normal_sandwiches.size(); j++) {
+        if (res.normal_sandwiches[j].name == sort_sandwiches_srv.response.normal_sandwiches[i].name) {
+          normal_index = j;
+          break;
+        }
+      }
+      if (normal_index >= 0) {
+        res.normal_sandwiches[normal_index] = sort_sandwiches_srv.response.normal_sandwiches[i];
+      } else {
+        res.normal_sandwiches.push_back(sort_sandwiches_srv.response.normal_sandwiches[i]);
+      }
+    }
+
+    if (sort_sandwiches_srv.response.scrap_sandwiches.size() > 0) { // 廃棄サンドイッチを認識した
+      ROS_WARN("[detectAndRecoverSandwich]:Detect Success");
+
+      // 認識した廃棄サンドイッチで規定回数以上ピッキングしていたものをカウント
+      int picking_overflow_count = 0;
+      for (size_t i = 0; i < sort_sandwiches_srv.response.scrap_sandwiches.size(); i++) {
+        // index 選択
+        for (size_t j = 0; j < scrap_sandwich_ids.size(); j++) {
+          if (scrap_sandwich_infos[j].name == sort_sandwiches_srv.response.scrap_sandwiches[i].name) {
+            if (scrap_sandwich_infos[j].picking_count >= 2) {
+              picking_overflow_count++;
+            }
+            break;
+          }
+        }
+      }
+      // 今回の認識動作で認識した廃棄サンドイッチがすべて規定回数以上ピッキングしていた
+      if (picking_overflow_count == sort_sandwiches_srv.response.scrap_sandwiches.size()) {
+        ROS_WARN("[detectAndRecoverSandwich]:Picking overflow");
+        if (detect_pattern != max_detect_pattern) {// まだ動作パターンある
+          ROS_WARN("[detectAndRecoverSandwich]:Do next motion pattern");
+          detect_pattern++;
+          for (size_t i = 0; i < sort_sandwiches_srv.response.scrap_sandwiches.size(); i++) {
+            detect_object_srv.request.delete_object_names.push_back(sort_sandwiches_srv.response.scrap_sandwiches[i].name);
+          }
+          detect_object_client.call(detect_object_srv);
+          continue;
+        } else {// 動作パターンない
+          ROS_WARN("[detectAndRecoverSandwich]:No next motion pattern");
+          ROS_WARN("[detectAndRecoverSandwich]:FALSE");
+          res.success = false;
+          return (true);
+        }
+      }
+
+      // 3.サンドイッチを棚の手前優先で並べる
+      fcsc_msgs::SortOrderManipulation sort_order_srv;
+      sort_order_srv.request.objects = sort_sandwiches_srv.response.scrap_sandwiches;
+      sortOrderPickingSandwiches(sort_order_srv.request, sort_order_srv.response);
+
+      // 4.手前から順にサンドイッチ廃棄
+      for (size_t i = 0; i < sort_order_srv.response.objects.size(); i++) {
+        // index 選択
+        int index;
+        for (size_t j = 0; j < scrap_sandwich_ids.size(); j++) {
+          if (scrap_sandwich_infos[j].name == sort_order_srv.response.objects[i].name) {
+            index = j;
+            break;
+          }
+        }
+
+        if (!scrap_sandwich_infos[index].detected) {// 未検出
+          // 検出済みに設定
+          ROS_WARN("[detectAndRecoverSandwich]:First detected");
+          scrap_sandwich_infos[index].detected = true;
+        } else if (scrap_sandwich_infos[index].recoverd) {// 検出済み 廃棄済み(サンドイッチを掴めていなかった)
+          // 未廃棄に設定
+          ROS_WARN("[detectAndRecoverSandwich]:Detected Recovered");
+          scrap_sandwich_infos[index].recoverd = false;
+        } else {// 検出済み 未廃棄(過去にピッキングを試みて失敗した)
+          ROS_WARN("[detectAndRecoverSandwich]:Detected Not recovered");
+        }
+
+        fcsc_msgs::Manipulate manipulate_srv;
+        manipulate_srv.request.manipulation_type = fcsc_msgs::Manipulate::Request::RECOVER;
+        manipulate_srv.request.object = sort_order_srv.response.objects[i];
+        ROS_WARN("[detectAndRecoverSandwich]:pickupSandwich");
+        pickupSandwich(manipulate_srv.request, manipulate_srv.response);
+        scrap_sandwich_infos[index].picking_count++;
+        if (!manipulate_srv.response.success) {
+          ROS_WARN("[detectAndRecoverSandwich]:pickup false");
+          continue;
+        }
+        ROS_WARN("[detectAndRecoverSandwich]:pickup success");
+        recoverSandwich(manipulate_srv.request, manipulate_srv.response);
+      }
+    } else {//検出失敗
+      ROS_WARN("[detectAndRecoverSandwich]:Detect False");
+      if (detect_pattern != max_detect_pattern) {// 手前認識動作で廃棄サンドイッチを認識せず
+        ROS_WARN("[detectAndRecoverSandwich]:Do next motion pattern");
+        // 6.奥側動作でサンドイッチ認識に切り替え
+        // 動作パターン変更
+        detect_pattern ++;
+      } else {// 奥認識動作で廃棄サンドイッチ認識せず
+        ROS_WARN("[detectAndRecoverSandwich]:No next motion pattern");
+        int recover_success_count = 0;
+        for (size_t i = 0; i < scrap_sandwich_infos.size(); i++) {
+          if (scrap_sandwich_infos[i].recoverd) {
+            recover_success_count++;
+          }
+        }
+        if (recover_success_count == scrap_sandwich_ids.size()) {// すべて廃棄済みなら成功
+          ROS_WARN("[detectAndRecoverSandwich]:All recoverd");
+          ROS_WARN("[detectAndRecoverSandwich]:SUCCESS");
+          res.success = true;
+        } else {// 廃棄済みでないなら失敗
+          ROS_WARN("[detectAndRecoverSandwich]:FALSE");
+          res.success = false;
+        }
+        asyncMoveArm(recover_pose_name);
+        return (true);
+      }
+    }
+
+    // 認識動作で認識したサンドイッチは消す
+    for (size_t i = 0; i < sort_sandwiches_srv.response.scrap_sandwiches.size(); i++) {
+      detect_object_srv.request.delete_object_names.push_back(sort_sandwiches_srv.response.scrap_sandwiches[i].name);
+    }
+    detect_object_client.call(detect_object_srv);
+
+  }
+}
+
+bool FcscCore::faceupSandwichV2(fcsc_msgs::Manipulate::Request &req, fcsc_msgs::Manipulate::Response &res)
+{
+  std::vector<visualization_msgs::Marker> baselines;
+  double z_offset = 0.05;
+  bool success;
+
+  // 基準線の設定
+  // 棚の手前 5cm 以内
+  baselines.resize(4);
+  for (size_t i = 0; i < baselines.size(); i++) {
+    baselines[i].header.frame_id = shelfB_board_name;
+    baselines[i].points.resize(2);
+    // x = サンドイッチの奥行き + サンドイッチと棚の距離
+    baselines[i].points[0].x = baselines[i].points[1].x = 0.09 + 0.01 * (i+1);
+    baselines[i].points[0].y = 0.08 + 0.08;
+    baselines[i].points[1].y = shelf_width - (0.08 + 0.08);
+  }
+
+  // マニピュレーション
+
+  // 基準線上のどこかに目標位置を設定して移動
+  for (size_t i = 0; i < baselines.size(); i++) {
+    double particle = 20;
+    geometry_msgs::Vector3 vec;
+
+    vec.x = (baselines[i].points[1].x - baselines[i].points[0].x) / particle;
+    vec.y = (baselines[i].points[1].y - baselines[i].points[0].y) / particle;
+
+    for (double j = 0; j <= particle; j++) {
+      success = false;
+      // サンドイッチと棚の干渉チェックをやりたいから、何か処理をここに書く
+      geometry_msgs::PoseStamped target_ee_pose;
+      geometry_msgs::PoseStamped target_object_pose;
+
+      if (req.object.pose.header.frame_id != shelfB_board_name) {
+        geometry_msgs::PoseStamped ps_out;
+        transformPose(shelfB_board_name, req.object.pose, ps_out, listener);
+        req.object.pose = ps_out;
+      }
+
+      target_object_pose.header.frame_id = shelfB_board_name;
+      target_object_pose.pose.orientation.w = 1.0;
+      target_object_pose.pose.position.x = baselines[i].points[0].x + j * vec.x;
+      target_object_pose.pose.position.y = baselines[i].points[0].y + j * vec.y;
+      target_object_pose.pose.position.z = req.object.pose.pose.position.z + z_offset;
+
+      target_ee_pose = getPoseStamped(target_object_pose, "grasped_"+req.object.name, move_group.getEndEffectorLink(), listener);
+
+      if (!computeIK(target_ee_pose)) {
+        continue;
+      }
+
+      // 目標位置に物体を可視化
+      geometry_msgs::PoseStamped pout;
+      transformPose(visual_frame_id_, target_object_pose, pout, listener);
+      if (visual_tools->publishMesh(pout.pose, "package://fcsc_description/mesh/sandwich-v2.stl", rviz_visual_tools::BLUE)) {
+        visual_tools->trigger();
+      }
+
+      geometry_msgs::PoseArray waypoints;
+      waypoints.header.frame_id = target_ee_pose.header.frame_id;
+      waypoints.poses.push_back(target_ee_pose.pose);
+      // success = moveArmCartesianPath(waypoints.header.frame_id, waypoints.poses, 0.01, 0.0);
+
+      // success = asyncMoveArm(recover_pose_name);
+      // if (!success) {
+      //   continue;
+      // }
+
+      success = asyncMoveArm(target_ee_pose);
+      if (success) {
+        target_ee_pose.pose.position.z -= z_offset / 2.0;
+        waypoints.poses[0] = target_ee_pose.pose;
+        moveArmCartesianPath(waypoints.header.frame_id, waypoints.poses, 0.01, 0.0, false);
+        break;
+      }
+    }
+    if (success) {
+      break;
+    }
+  }
+
+  res.success = success;
+
+  geometry_msgs::PoseStamped object_pose;
+
+  releaseObject(req.object.name, 50);
+  getCurrentObjectPose(req.object.name, shelfB_board_name, object_pose);
+  if (req.object.pose.header.frame_id != shelfB_board_name) {
+    geometry_msgs::PoseStamped ps_out;
+    transformPose(shelfB_board_name, req.object.pose, ps_out, listener);
+    object_pose.pose.position.z = ps_out.pose.position.z;
+  }
+  fcsc_visual_tools.contactProduct(req.object.name, shelfB_board_name, object_pose);
+
+  return (true);
+}
+
+void FcscCore::planSandwichPlacement(fcsc_msgs::RecognizedObject sandwich, std::vector<ExecutableGrasp>& placement_plans)
+{
+  std::vector<ExecutableGrasp> executable_grasps;
+  fcsc_msgs::RecognizedObject sandwich_placement;
+  robot_state::RobotState     robot_state(planning_scene_monitor.getPlanningScene()->getCurrentStateNonConst());
+  moveit_msgs::RobotState     robot_state_msg;
+  double                      ee_joint_position;
+  bool                        success;
+
+  fcsc_visual_tools.deleteObject(sandwich.name);
+
+  // サンドイッチの置く場所決める
+  sandwich_placement.type = fcsc_msgs::RecognizedObject::SANDWICH;
+  sandwich_placement.name = "sandwich_placement";
+  sandwich_placement.pose.header.frame_id = shelfB_board_name;
+  sandwich_placement.pose.pose.position.x = 0.09 + 0.03;
+  sandwich_placement.pose.pose.position.y = 0.45;
+  sandwich_placement.pose.pose.position.z = 0.03;
+
+  for (double yaw = 0; yaw < 2.0 * M_PI; yaw += M_PI / 4.0) {
+    // サンドイッチの置く向き設定
+    sandwich_placement.pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, 0, yaw);
+    fcsc_visual_tools.publishProduct(sandwich_placement);
+
+    // 置いたサンドイッチに対する把持計画
+    // 見つけた複数の把持姿勢をデータに格納
+    std::vector<ExecutableGrasp> grasps;
+    getExecutableGrasps(SANDWICH, sandwich_placement.name, grasps);
+    executable_grasps.insert(executable_grasps.end(), grasps.begin(), grasps.end());
+  }
+
+  fcsc_visual_tools.deleteObject(sandwich_placement.name);
+
+  //データ構造内の複数把持姿勢をソートする
+  std::vector<ass_arr>  grasp_cost_map;
+
+  robot_state.setJointGroupPositions(move_group.getName(), start_joint_group_positions_);
+
+  for (size_t i = 0; i < executable_grasps.size(); i++) {
+    // IK + 衝突チェック
+    // 逆運動学で配置姿勢の確認
+    ee_joint_position = robot_hand.posToJoint(executable_grasps[i].grasp.grasp_posture.points[0].positions[0]);
+    robot_state.setVariablePosition("bottom_ezgripper_knuckle_palm_L1_1", ee_joint_position);
+    robot_state.setVariablePosition("bottom_ezgripper_knuckle_palm_L1_2", ee_joint_position);
+    robot_state.setVariablePosition("top_ezgripper_knuckle_palm_L1_1", ee_joint_position);
+    robot_state.setVariablePosition("top_ezgripper_knuckle_palm_L1_2", ee_joint_position);
+    moveit::core::robotStateToRobotStateMsg(robot_state, robot_state_msg);
+    success = computeIK(executable_grasps[i].grasp.grasp_pose, robot_state_msg);
+    if (!success) {
+      ROS_ERROR("[planSandwichPlacement]:IK failed");
+      continue;
+    }
+
+    // Transform設定
+    tf::Transform grasp_tf(tf::Quaternion(executable_grasps[i].target_pose.pose.orientation.x, executable_grasps[i].target_pose.pose.orientation.y, executable_grasps[i].target_pose.pose.orientation.z, executable_grasps[i].target_pose.pose.orientation.w), tf::Vector3(executable_grasps[i].target_pose.pose.position.x, executable_grasps[i].target_pose.pose.position.y, executable_grasps[i].target_pose.pose.position.z));
+
+    // Matrix3x3設定
+    tf::Matrix3x3 grasp_matrix(grasp_tf.getRotation().normalized());
+
+    // 棚座標系の軸と，把持方向(x軸)との内積をとる
+    double cost = max(grasp_matrix.tdotx(tf::Vector3(0, 0, -1.0)), grasp_matrix.tdotx(tf::Vector3(1, 0, 0)));
+
+    // (index,可操作度)のペアでデータ構造に格納
+    grasp_cost_map.push_back(ass_arr(i, cost));
+  }
+
+  // cost最大の把持姿勢を優先する
+  sort(grasp_cost_map.begin(), grasp_cost_map.end(), sort_greater);
+
+  // データ構造内の把持姿勢が倒れたサンドイッチで可能かIKで確認
+  for (std::vector<ass_arr>::iterator it = grasp_cost_map.begin(); it != grasp_cost_map.end(); it++) {
+    if (checkGrasp(executable_grasps[it->first].grasp, sandwich.name)) {
+      placement_plans.push_back(executable_grasps[it->first]);
+    }
+  }
+
+  fcsc_visual_tools.publishProduct(sandwich);
+}
+
+bool FcscCore::faceupSandwichV3(fcsc_msgs::Manipulate::Request &req, fcsc_msgs::Manipulate::Response &res)
+{
+  std::vector<ExecutableGrasp> placement_plans;
+
+  planSandwichPlacement(req.object, placement_plans);
+
+  moveArm(recover_pose_name);
+  for (size_t i = 0; i < placement_plans.size(); i++) {
+    if (!pickup(req.object.name, placement_plans[i].grasp)) {
+      continue;
+    }
+
+    moveArm(recover_pose_name);
+    moveArm(placement_plans[i].target_pose);
+    releaseObject(req.object.name, 100);
+    break;
+
+    for (size_t j = 0; j < placement_plans.size(); j++) {
+      if (placement_plans[j].grasp.id != placement_plans[i].grasp.id) {
+        continue;
+      }
+      if (!moveArm(placement_plans[j].target_pose)) {
+        continue;
+      }
+      releaseObject(req.object.name, 100);
+      break;
+    }
+    break;
+  }
+  moveArm(recover_pose_name);
+  return (true);
+}
+
+bool FcscCore::faceupSandwiches(fcsc_msgs::FaceupSandwich::Request &req, fcsc_msgs::FaceupSandwich::Response &res)
+{
+  fcsc_msgs::Manipulate manipulate_srv;
+  fcsc_msgs::SortOrderManipulation sort_order_srv;
+
+  asyncMoveArm(recover_pose_name);
+
+  manipulate_srv.request.manipulation_type = fcsc_msgs::Manipulate::Request::FACEUP;
+
+  // 棚の手前のサンドイッチから作業を優先する
+  sort_order_srv.request.objects = req.sandwiches;
+  sortOrderPickingSandwiches(sort_order_srv.request, sort_order_srv.response);
+
+  for (size_t i = 0; i < sort_order_srv.response.objects.size(); i++) {
+    fcsc_msgs::RecognizedObject sandwich = sort_order_srv.response.objects[i];
+    if (sandwich.state == fcsc_msgs::RecognizedObject::LEFT_SIDE || sandwich.state == fcsc_msgs::RecognizedObject::RIGHT_SIDE) {
+      // 倒れたサンドイッチを立てる
+      fcsc_msgs::Manipulate manipulate_srv;
+      manipulate_srv.request.object = sandwich;
+      waitForExecute();
+      if (!changeSandwichPose(manipulate_srv.request, manipulate_srv.response)) {
+        move_group.setMaxVelocityScalingFactor(normal_velocity);
+        continue;
+      }
+
+      move_group.setMaxVelocityScalingFactor(normal_velocity);
+
+      bool detected = false;
+
+      // カメラを動かして立てたサンドイッチの位置を検出する
+      for (size_t k = 0; k < 3; k++) {
+        geometry_msgs::PoseStamped camera_pose;
+        geometry_msgs::PoseStamped target_pose;
+        transformPose(shelfB_board_name, sandwich.pose, camera_pose, listener);
+        switch (k) {
+          case 0: {
+            camera_pose.pose.position.z = 0.2;
+            camera_pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, M_PI / 2.0, 0);
+            break;
+          }
+          case 1: {
+            camera_pose.pose.position.z = 0.2;
+            camera_pose.pose.position.x -= 0.15;
+            camera_pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, M_PI / 3.0, 0);
+            break;
+          }
+          case 2: {
+            camera_pose.pose.position.z = 0.2;
+            camera_pose.pose.position.x -= 0.15;
+            camera_pose.pose.position.y = 0.45;
+            camera_pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, M_PI / 4.0, 0);
+            break;
+          }
+        }
+        ROS_ERROR("[faceupSandwiches]:[%d]", (int)k);
+        target_pose = getPoseStamped(camera_pose, "camera_optical_center_line_link", "gripper_link", listener);
+        target_pose.pose.position.z = 0.3;
+        if (!moveArm(target_pose)) {
+          continue;
+        }
+        ros::WallDuration(3.0).sleep();
+
+        // マーカー認識
+        fcsc_msgs::DetectObject detect_object_srv;
+        detect_object_srv.request.detect = true;
+        detect_object_srv.request.visualize = true;
+        detect_object_client.call(detect_object_srv);
+
+        // サンドイッチの位置を更新
+        for (size_t j = 0; j < detect_object_srv.response.detected_object_array.objects.size(); j++) {
+          fcsc_msgs::RecognizedObject detected_sandwich = detect_object_srv.response.detected_object_array.objects[j];
+          if (detected_sandwich.name == sandwich.name && detected_sandwich.state == fcsc_msgs::RecognizedObject::BOTTOM) {
+            detected = true;
+            sandwich = detected_sandwich;
+            break;
+          }
+        }// update sandwich loop
+        if (detected) {
+          break;
+        }
+      }// redetect sandwich loop
+      if (!detected) {
+        continue;
+      }
+    } else if (sandwich.state != fcsc_msgs::RecognizedObject::BOTTOM) {
+      continue;
+    }
+    manipulate_srv.request.object = sandwich;
+    pickupSandwich(manipulate_srv.request, manipulate_srv.response);
+    if (!manipulate_srv.response.success) {
+      continue;
+    }
+    asyncMoveArm(recover_pose_name);
+    faceupSandwichV2(manipulate_srv.request, manipulate_srv.response);
+    if (manipulate_srv.response.success) {
+      // フェイスアップが成功すれば認識した物体情報を消しておく
+      fcsc_msgs::DetectObject srv;
+      srv.request.delete_object_names.push_back(sandwich.name);
+      srv.request.visualize = false;
+      detect_object_client.call(srv);
+    }
+    asyncMoveArm(recover_pose_name);
+  }
+
+  res.success = true;
+  return (true);
+}
+
+// サンドイッチの向きを調節する
+bool FcscCore::adjustOrientationOfSandwich(fcsc_msgs::Manipulate::Request &req, fcsc_msgs::Manipulate::Response &res)
+{
+  geometry_msgs::PoseStamped  target_ee_pose;
+  geometry_msgs::PoseStamped  target_object_pose;
+  geometry_msgs::PoseStamped  pose_in;
+
+  target_ee_pose.header.frame_id = shelfB_board_name;
+  target_ee_pose.pose.position.x = 0.1;
+  target_ee_pose.pose.position.y = 0.45;
+  target_ee_pose.pose.position.z = 0.15;
+  target_ee_pose.pose.orientation.w = 1.0;
+  res.success = asyncMoveArm(target_ee_pose);
+
+  // releaseObject(req.object.name, robot_hand.jointToPos(robot_hand.getCurrentJointValues()[0]) + 20);
+
+  return (true);
+
+  // サンドイッチの位置は変えず，方向のみラベルが前にくる向きにする
+  pose_in.header.frame_id = "grasped_"+req.object.name;
+  pose_in.pose.orientation.w = 1.0;
+
+  target_object_pose.header.frame_id = shelfB_board_name;
+  transformPose(shelfB_board_name, pose_in, target_object_pose, listener);
+  target_object_pose.pose.orientation.x = 0.0;
+  target_object_pose.pose.orientation.y = 0.0;
+  target_object_pose.pose.orientation.z = 0.0;
+  target_object_pose.pose.orientation.w = 1.0;
+
+  target_ee_pose = getPoseStamped(target_object_pose, "grasped_"+req.object.name, move_group.getEndEffectorLink(), listener);
+
+  res.success = asyncMoveArm(target_ee_pose);
+
+  return (true);
+}
+
+// サンドイッチ名はreq.object.name
+// マニピュレーションの成功(true)失敗(false)を res.successに入れる
+bool FcscCore::changeSandwichPose(fcsc_msgs::Manipulate::Request &req, fcsc_msgs::Manipulate::Response &res)
+{
+  switch (req.object.state) {
+    case fcsc_msgs::RecognizedObject::BOTTOM : {// 通常
+
+      break;
+    }
+    case fcsc_msgs::RecognizedObject::BACK : {// 背面接地//完成OK
+  // ros::AsyncSpinner spinner(1);
+  // ros::NodeHandle nh;
+  // tf::TransformListener			listener;
+  // ros::ServiceClient				detect_object_client;
+  // spinner.start();
+  geometry_msgs::PoseStamped test_stamped;
+  geometry_msgs::PoseStamped target_pose_stamped;
+  std::vector<geometry_msgs::Pose> waypoints;
+  geometry_msgs::PoseStamped current_pose_stamped;
+  geometry_msgs::PoseStamped waypoint_stamped;
+  moveit::planning_interface::MoveGroupInterface::Plan plan;
+  move_group.setMaxVelocityScalingFactor(0.1);
+  // moveit::planning_interface::MoveGroupInterface   move_group("manipulator");
+  moveit::planning_interface::MoveGroupInterface   move_group2("endeffector");
+  //XmlRpc::XmlRpcValue params;
+  EZGripper	both_ezgripper("/ezgripper/both");
+ // detect_object_client = nh.serviceClient<fcsc_msgs::DetectObject>("detect_object");
+  fcsc_msgs::DetectObject	detect_object_srv;
+  detect_object_srv.request.detect = true;
+  detect_object_srv.request.visualize = true;
+
+
+  	target_pose_stamped.header.frame_id = req.object.name;
+  	target_pose_stamped.pose.position.x = -0.025;
+  	target_pose_stamped.pose.position.y = 0;
+  	target_pose_stamped.pose.position.z = 0.025;
+  	target_pose_stamped.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(- M_PI, 0, 0);
+
+  	target_pose_stamped.header.stamp = ros::Time();
+  	transformPose("base_footprint", target_pose_stamped, test_stamped, listener);
+
+  	move_group.setJointValueTarget(test_stamped);
+  	move_group.setStartStateToCurrentState();
+  	bool success = (bool)move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error1");
+  		return(false);
+  	}
+
+   	success = (bool) move_group.execute(plan);
+	if (!success) {
+		ROS_INFO("execute error1");
+		for ( int i= 1; i <= 5; i++) {
+  			move_group.setStartStateToCurrentState();
+  			move_group.plan(plan);
+  			success = (bool) move_group.execute(plan);
+  			if (!success){
+  				ROS_INFO("execute  error1 %d回目", (int) i+1 );
+  				continue;
+  			} else {
+  				ROS_INFO("execute  success1 %d回目", (int) i+1 );
+  				break;
+  				}
+  			}
+  		} else {
+  			ROS_INFO("execute  success1");
+  	}
+
+
+	move_group.attachObject(req.object.name, move_group.getEndEffectorLink(),touch_links_);
+
+	both_ezgripper.goToPosition(1.2, 20);
+
+	move_group2.move();
+
+	//move_group.setStartStateToCurrentState();
+	test_stamped= move_group.getCurrentPose();
+
+  	test_stamped.pose.position.z += 0.1;
+  	move_group.setJointValueTarget(test_stamped);
+  	move_group.setStartStateToCurrentState();
+  	success = (bool)move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error2");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+
+   	success = (bool) move_group.execute(plan);
+	if (!success) {
+		ROS_INFO("execute error2");
+		for ( int i= 1; i <= 5; i++) {
+  			move_group.setStartStateToCurrentState();
+  			move_group.plan(plan);
+  			success = (bool) move_group.execute(plan);
+  			if (!success){
+  				ROS_INFO("execute  error2 %d回目", (int) i+1 );
+  				continue;
+  			} else {
+  				ROS_INFO("execute  success2 %d回目", (int) i+1 );
+  				break;
+  				}
+  			}
+  		} else {
+  			ROS_INFO("execute  success2");
+  	}
+
+	/*move_group.setPoseReferenceFrame("base_footprint");
+
+  	waypoints.resize(1);
+  	waypoints[0].position.x = test_stamped.pose.position.x ;
+ 	waypoints[0].position.y = test_stamped.pose.position.y;
+  	waypoints[0].position.z = test_stamped.pose.position.z + 0.1;
+  	waypoints[0].orientation = test_stamped.pose.orientation;
+  	success = (bool) move_group.computeCartesianPath(waypoints, 0.01, 0.0, plan.trajectory_, moveit_msgs::Constraints(), true);
+  	if (!success) {
+  		move_group.detachObject(req.object.name);
+  		ROS_INFO("plan error2");
+  		return(false);
+  	}
+   	move_group.execute(plan);*/
+
+	//move_group.setStartStateToCurrentState();
+	test_stamped= move_group.getCurrentPose();
+	listener.waitForTransform("shelfB_board_2", test_stamped.header.frame_id, test_stamped.header.stamp, ros::Duration(2.0));
+	ros::Rate rate(10);
+	for (int i = 0; i < 10; i++) {
+	  listener.transformPose("shelfB_board_2", test_stamped, target_pose_stamped);
+	  rate.sleep();
+	}
+
+	target_pose_stamped.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(M_PI/2, M_PI/2, M_PI / 2);
+
+  	target_pose_stamped.header.stamp = ros::Time();
+  	transformPose("base_footprint", target_pose_stamped, test_stamped, listener);
+  	move_group.setJointValueTarget(test_stamped);
+  	move_group.setStartStateToCurrentState();
+  	success = (bool)move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error3");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+
+   	success = (bool) move_group.execute(plan);
+	if (!success) {
+		ROS_INFO("execute error3");
+		for ( int i= 1; i <= 5; i++) {
+  			move_group.setStartStateToCurrentState();
+  			move_group.plan(plan);
+  			success = (bool) move_group.execute(plan);
+  			if (!success){
+  				ROS_INFO("execute  error3 %d回目", (int) i+1 );
+  				continue;
+  			} else {
+  				ROS_INFO("execute  success3 %d回目", (int) i+1 );
+  				break;
+  				}
+  			}
+  		} else {
+  			ROS_INFO("execute  success3");
+  	}
+
+  	/* wrist_joint_value = move_group.getCurrentJointValues()[5];
+
+	move_group.setJointValueTarget("wrist_3_joint", wrist_joint_value + M_PI);
+  	move_group.plan(plan);
+  	move_group.execute(plan);
+
+  	test_stamped= move_group.getCurrentPose();*/
+
+  	test_stamped= move_group.getCurrentPose();
+
+  	test_stamped.pose.position.z -= 0.08;
+  	move_group.setJointValueTarget(test_stamped);
+  	move_group.setStartStateToCurrentState();
+  	success = (bool)move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error4");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+
+   	success = (bool) move_group.execute(plan);
+	if (!success) {
+		ROS_INFO("execute error4");
+		for ( int i= 1; i <= 5; i++) {
+  			move_group.setStartStateToCurrentState();
+  			move_group.plan(plan);
+  			success = (bool) move_group.execute(plan);
+  			if (!success){
+  				ROS_INFO("execute  error4 %d回目", (int) i+1 );
+  				continue;
+  			} else {
+  				ROS_INFO("execute  success4 %d回目", (int) i+1 );
+  				break;
+  				}
+  			}
+  		} else {
+  			ROS_INFO("execute  success4");
+  	}
+
+  	/*move_group.setPoseReferenceFrame("base_footprint");
+
+  	waypoints.resize(1);
+  	waypoints[0].position.x = test_stamped.pose.position.x ;
+ 	waypoints[0].position.y = test_stamped.pose.position.y;
+  	waypoints[0].position.z = test_stamped.pose.position.z - 0.08;
+  	waypoints[0].orientation = test_stamped.pose.orientation;
+  	success = (bool)move_group.computeCartesianPath(waypoints, 0.01, 0.0, plan.trajectory_, moveit_msgs::Constraints(), true);
+  	if (!success) {
+  		ROS_INFO("plan error4");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+   	move_group.execute(plan);*/
+
+
+
+  	both_ezgripper.goToPosition(0);
+	move_group2.move();
+  	move_group.detachObject(req.object.name);
+
+  	detect_object_client.call(detect_object_srv);
+
+// recognize again
+    moveArm(recover_pose_name);
+
+
+  	target_pose_stamped.header.frame_id = req.object.name;
+  	target_pose_stamped.pose.position.x = -0.045;
+  	target_pose_stamped.pose.position.y = 0;
+  	target_pose_stamped.pose.position.z = 0.03;
+  	target_pose_stamped.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, M_PI *138/180, M_PI);
+
+  	target_pose_stamped.header.stamp = ros::Time();
+  	transformPose("base_footprint", target_pose_stamped, test_stamped, listener);
+
+  	move_group.setJointValueTarget(test_stamped);
+  	move_group.setStartStateToCurrentState();
+  	success = (bool)move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error5");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+
+  	success = (bool) move_group.execute(plan);
+	if (!success) {
+		ROS_INFO("execute error5");
+		for ( int i= 1; i <= 5; i++) {
+  			move_group.setStartStateToCurrentState();
+  			move_group.plan(plan);
+  			success = (bool) move_group.execute(plan);
+  			if (!success){
+  				ROS_INFO("execute  error5 %d回目", (int) i+1 );
+  				continue;
+  			} else {
+  				ROS_INFO("execute  success5 %d回目", (int) i+1 );
+  				break;
+  				}
+  			}
+  		} else {
+  			ROS_INFO("execute  success5");
+  	}
+
+	move_group.attachObject(req.object.name, move_group.getEndEffectorLink(),touch_links_);
+	both_ezgripper.goToPosition(1.2, 20);
+	move_group2.move();
+
+	//move_group.setPoseReferenceFrame("base_footprint");
+
+  	test_stamped= move_group.getCurrentPose();
+
+  	test_stamped.pose.position.z += 0.13;
+  	move_group.setJointValueTarget(test_stamped);
+  	move_group.setStartStateToCurrentState();
+  	success = (bool)move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error6");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+
+   	success = (bool) move_group.execute(plan);
+	if (!success) {
+		ROS_INFO("execute error6");
+		for ( int i= 1; i <= 5; i++) {
+  			move_group.setStartStateToCurrentState();
+  			move_group.plan(plan);
+  			success = (bool) move_group.execute(plan);
+  			if (!success){
+  				ROS_INFO("execute  error6 %d回目", (int) i+1 );
+  				continue;
+  			} else {
+  				ROS_INFO("execute  success6 %d回目", (int) i+1 );
+  				break;
+  				}
+  			}
+  		} else {
+  			ROS_INFO("execute  success6");
+  	}
+
+  	/*test_stamped= move_group.getCurrentPose();
+  	waypoints.resize(1);
+  	waypoints[0].position.x = test_stamped.pose.position.x ;
+ 	waypoints[0].position.y = test_stamped.pose.position.y;
+  	waypoints[0].position.z = test_stamped.pose.position.z + 0.2;
+  	waypoints[0].orientation = test_stamped.pose.orientation;
+  	move_group.computeCartesianPath(waypoints, 0.01, 0.0, plan.trajectory_, moveit_msgs::Constraints(), false);
+  	move_group.execute(plan);*/
+
+  	double wrist_joint_value = move_group.getCurrentJointValues()[5];
+
+	move_group.setJointValueTarget("wrist_3_joint", wrist_joint_value + M_PI);
+	move_group.setStartStateToCurrentState();
+  	success = (bool)move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error7");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+
+   	success = (bool) move_group.execute(plan);
+	if (!success) {
+		ROS_INFO("execute error7");
+		for ( int i= 1; i <= 5; i++) {
+  			move_group.setStartStateToCurrentState();
+  			move_group.plan(plan);
+  			success = (bool) move_group.execute(plan);
+  			if (!success){
+  				ROS_INFO("execute  error7 %d回目", (int) i+1 );
+  				continue;
+  			} else {
+  				ROS_INFO("execute  success7 %d回目", (int) i+1 );
+  				break;
+  				}
+  			}
+  		} else {
+  			ROS_INFO("execute  success7");
+  	}
+
+	/*double wrist_joint_value = move_group.getCurrentJointValues()[5];
+
+  	test_stamped= move_group.getCurrentPose();
+	listener.waitForTransform("shelfB_board_2", test_stamped.header.frame_id, test_stamped.header.stamp, ros::Duration(2.0));
+	//ros::Rate rate(10);
+	for (int i = 0; i < 10; i++) {
+	  listener.transformPose("shelfB_board_2", test_stamped, target_pose_stamped);
+	  rate.sleep();
+	}
+
+	if (target_pose_stamped.pose.position.y >= 0.45){
+		move_group.setJointValueTarget("wrist_3_joint", wrist_joint_value - M_PI);
+  		} else {
+  		move_group.setJointValueTarget("wrist_3_joint", wrist_joint_value + M_PI);
+  	}
+  	target_pose_stamped.header.stamp = ros::Time();
+  	transformPose("base_footprint", target_pose_stamped, test_stamped);
+  	move_group.plan(plan);
+  	move_group.execute(plan);*/
+
+	test_stamped= move_group.getCurrentPose();
+  	detect_object_client.call(detect_object_srv);
+
+  	test_stamped.pose.position.z -= 0.11;
+  	move_group.setJointValueTarget(test_stamped);
+  	move_group.setStartStateToCurrentState();
+  	success = (bool)move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error8");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+
+   	success = (bool) move_group.execute(plan);
+	if (!success) {
+		ROS_INFO("execute error8");
+		for ( int i= 1; i <= 5; i++) {
+  			move_group.setStartStateToCurrentState();
+  			move_group.plan(plan);
+  			success = (bool) move_group.execute(plan);
+  			if (!success){
+  				ROS_INFO("execute  error8 %d回目", (int) i+1 );
+  				continue;
+  			} else {
+  				ROS_INFO("execute  success8 %d回目", (int) i+1 );
+  				break;
+  				}
+  			}
+  		} else {
+  			ROS_INFO("execute  success8");
+  	}
+
+
+
+  	both_ezgripper.goToPosition(0);
+	move_group2.move();
+  	move_group.detachObject(req.object.name);
+
+  	detect_object_client.call(detect_object_srv);
+
+  	//test_stamped.pose.position.x -= 0.03;
+  	//move_group.setJointValueTarget(test_stamped);
+  	//move_group.move();
+    moveArm(recover_pose_name);
+      break;
+    }
+
+
+    case fcsc_msgs::RecognizedObject::FRONT : {// 前面接地 完成OK
+  // ros::AsyncSpinner spinner(1);
+  // ros::NodeHandle nh;
+  // tf::TransformListener			listener;
+  // ros::ServiceClient				detect_object_client;
+  // spinner.start();
+  geometry_msgs::PoseStamped test_stamped;
+  geometry_msgs::PoseStamped target_pose_stamped;
+  geometry_msgs::PoseStamped target_pose_stamped_2;
+  std::vector<geometry_msgs::Pose> waypoints;
+  geometry_msgs::PoseStamped current_pose_stamped;
+  geometry_msgs::PoseStamped waypoint_stamped;
+  moveit::planning_interface::MoveGroupInterface::Plan plan;
+  move_group.setMaxVelocityScalingFactor(0.1);
+  //moveit::planning_interface::MoveGroupInterface   move_group("manipulator");
+  moveit::planning_interface::MoveGroupInterface   move_group2("endeffector");
+  //XmlRpc::XmlRpcValue params;
+  EZGripper	both_ezgripper("/ezgripper/both");
+ // detect_object_client = nh.serviceClient<fcsc_msgs::DetectObject>("detect_object");
+  fcsc_msgs::DetectObject	detect_object_srv;
+  detect_object_srv.request.detect = true;
+  detect_object_srv.request.visualize = true;
+
+
+
+  //位置を修正する
+  	target_pose_stamped.header.frame_id = req.object.name;
+  	target_pose_stamped.pose.position.x = -0.025;
+  	target_pose_stamped.pose.position.y = 0;
+  	target_pose_stamped.pose.position.z = 0.025;
+  	target_pose_stamped.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, M_PI * 220 / 180, 0);
+
+  	target_pose_stamped.header.stamp = ros::Time();
+  	transformPose("base_footprint", target_pose_stamped, test_stamped, listener);
+
+  	move_group.setJointValueTarget(test_stamped);
+  	move_group.setStartStateToCurrentState();
+  	bool success = (bool)move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error1");
+  		return(false);
+  	}
+
+   	move_group.execute(plan);
+
+	move_group.attachObject(req.object.name, move_group.getEndEffectorLink(),touch_links_);
+	both_ezgripper.goToPosition(1.2, 20);
+	move_group2.move();
+
+	test_stamped= move_group.getCurrentPose();
+  	//move_group.setStartStateToCurrentState();
+
+  	test_stamped.pose.position.z += 0.1;
+  	move_group.setJointValueTarget(test_stamped);
+  	move_group.setStartStateToCurrentState();
+  	success = (bool)move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error2");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+
+   	move_group.execute(plan);
+
+	/*move_group.setPoseReferenceFrame("base_footprint");
+
+  	waypoints.resize(1);
+  	waypoints[0].position.x = test_stamped.pose.position.x ;
+ 	waypoints[0].position.y = test_stamped.pose.position.y;
+  	waypoints[0].position.z = test_stamped.pose.position.z + 0.15;
+  	waypoints[0].orientation = test_stamped.pose.orientation;
+  	success = (bool) move_group.computeCartesianPath(waypoints, 0.01, 0.0, plan.trajectory_, moveit_msgs::Constraints(), true);
+  	if (!success) {
+  		ROS_INFO("plan error2");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+   	move_group.execute(plan);*/
+
+	test_stamped= move_group.getCurrentPose();
+	listener.waitForTransform("shelfB_board_2", test_stamped.header.frame_id, test_stamped.header.stamp, ros::Duration(2.0));
+	ros::Rate rate(10);
+	for (int i = 0; i < 10; i++) {
+	  listener.transformPose("shelfB_board_2", test_stamped, target_pose_stamped);
+	  rate.sleep();
+	}
+
+	target_pose_stamped.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(M_PI/2, M_PI/2, M_PI / 2);
+
+  	target_pose_stamped.header.stamp = ros::Time();
+  	transformPose("base_footprint", target_pose_stamped, test_stamped, listener);
+  	move_group.setJointValueTarget(test_stamped);
+  	move_group.setStartStateToCurrentState();
+  	success = (bool)move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error3");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+
+   	move_group.execute(plan);
+
+  	/*move_group.setPoseReferenceFrame("base_footprint");
+
+  	waypoints.resize(1);
+  	waypoints[0].position.x = test_stamped.pose.position.x ;
+ 	waypoints[0].position.y = test_stamped.pose.position.y;
+  	waypoints[0].position.z = test_stamped.pose.position.z - 0.11;
+  	waypoints[0].orientation = test_stamped.pose.orientation;
+  	success = (bool) move_group.computeCartesianPath(waypoints, 0.01, 0.0, plan.trajectory_, moveit_msgs::Constraints(), true);
+  	if (!success) {
+  		ROS_INFO("plan error4");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+   	move_group.execute(plan);*/
+
+  	test_stamped= move_group.getCurrentPose();
+
+  	test_stamped.pose.position.z -= 0.08;
+  	move_group.setJointValueTarget(test_stamped);
+  	move_group.setStartStateToCurrentState();
+  	success = (bool)move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error4");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+
+   	move_group.execute(plan);
+
+
+  	both_ezgripper.goToPosition(0);
+	move_group2.move();
+  	move_group.detachObject(req.object.name);
+
+  	detect_object_client.call(detect_object_srv);
+    moveArm(recover_pose_name);
+//再認識する
+  	target_pose_stamped.header.frame_id = req.object.name;
+  	target_pose_stamped.pose.position.x = -0.01;//-0.02
+  	target_pose_stamped.pose.position.y = 0;
+  	target_pose_stamped.pose.position.z = 0.03;//0.07
+  	target_pose_stamped.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, M_PI, 0);
+
+  	target_pose_stamped.header.stamp = ros::Time();
+  	transformPose("base_footprint", target_pose_stamped, test_stamped, listener);
+
+	move_group.setMaxVelocityScalingFactor(0.2);
+  	move_group.setJointValueTarget(test_stamped);
+  	move_group.setStartStateToCurrentState();
+  	success = (bool)move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error5");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+
+   	move_group.execute(plan);
+
+	move_group.attachObject(req.object.name, move_group.getEndEffectorLink(),touch_links_);
+
+	both_ezgripper.goToPosition(1.5, 20);
+	move_group2.move();
+	move_group.setPoseReferenceFrame("base_footprint");
+
+	/*waypoints.resize(1);
+  	waypoints[0].position.x = test_stamped.pose.position.x ;
+ 	waypoints[0].position.y = test_stamped.pose.position.y;
+  	waypoints[0].position.z = test_stamped.pose.position.z ;
+  	waypoints[0].orientation = test_stamped.pose.orientation;
+  	move_group.computeCartesianPath(waypoints, 0.01, 0.0, plan.trajectory_, moveit_msgs::Constraints(), false);
+  	move_group.execute(plan);*/
+
+  	//target_pose_stamped = move_group.getCurrentPose();
+  	transformPose("shelfB_board_2", target_pose_stamped, target_pose_stamped_2, listener);
+
+
+  	target_pose_stamped_2.header.frame_id = "shelfB_board_2";
+
+  	/*if (target_pose_stamped_2.pose.position.x >= 0.25){
+  		target_pose_stamped_2.pose.position.x -= 0.1;
+  	} else {
+  		target_pose_stamped_2.pose.position.x += 0.1;
+  	}
+  	if (target_pose_stamped_2.pose.position.y >= 0.45){
+  		target_pose_stamped_2.pose.position.y -= 0.1;
+  	} else {
+  		target_pose_stamped_2.pose.position.y += 0.1;
+  	}*/
+
+
+  	target_pose_stamped.pose.position.x = 0.25;//-0.02
+  	target_pose_stamped.pose.position.y = 0.45;
+  	target_pose_stamped_2.pose.position.z = 0.13;//0.07
+  	target_pose_stamped_2.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0,M_PI/4,0);
+
+  	target_pose_stamped.header.stamp = ros::Time();
+  	transformPose("base_footprint", target_pose_stamped_2, test_stamped, listener);
+
+  	move_group.setJointValueTarget(test_stamped);
+  	move_group.setStartStateToCurrentState();
+  	move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error6");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+
+   	move_group.execute(plan);
+
+
+
+  	double wrist_joint_value = move_group.getCurrentJointValues()[5];
+
+	move_group.setJointValueTarget("wrist_3_joint", wrist_joint_value + M_PI);
+	move_group.setStartStateToCurrentState();
+  	success = (bool)move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error7");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+
+   	move_group.execute(plan);
+
+
+  	test_stamped= move_group.getCurrentPose();
+
+  	waypoints.resize(1);
+  	waypoints[0].position.x = test_stamped.pose.position.x;
+ 	waypoints[0].position.y = test_stamped.pose.position.y;
+  	waypoints[0].position.z = test_stamped.pose.position.z - 0.11;
+  	waypoints[0].orientation = test_stamped.pose.orientation;
+  	(bool) move_group.computeCartesianPath(waypoints, 0.01, 0.0, plan.trajectory_, moveit_msgs::Constraints(), true);
+  	if (!success) {
+  		ROS_INFO("plan error8");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+
+   	move_group.execute(plan);
+
+
+  	detect_object_client.call(detect_object_srv);
+
+ 	// [0, 1.94] (rad)
+  	// open: 0
+  	// close: 1.94
+  	both_ezgripper.goToPosition(0);
+	move_group2.move();
+  	move_group.detachObject(req.object.name);
+
+  	detect_object_client.call(detect_object_srv);
+
+  	move_group.move();
+    moveArm(recover_pose_name);
+      break;
+    }
+    case fcsc_msgs::RecognizedObject::RIGHT_SIDE :// 側面接地
+     {
+  ros::AsyncSpinner spinner(1);
+  ros::NodeHandle nh;
+ // tf::TransformListener                   listener;
+ // ros::ServiceClient                      detect_object_client;
+  spinner.start();
+  geometry_msgs::PoseStamped test_stamped;
+  geometry_msgs::PoseStamped target_pose_stamped;
+  std::vector<geometry_msgs::Pose> waypoints;
+  geometry_msgs::PoseStamped current_pose_stamped;
+  geometry_msgs::PoseStamped waypoint_stamped;
+  moveit::planning_interface::MoveGroupInterface::Plan plan;
+  move_group.setMaxVelocityScalingFactor(0.1);
+  // moveit::planning_interface::MoveGroupInterface   move_group("manipulator");
+  moveit::planning_interface::MoveGroupInterface   move_group2("endeffector");
+  EZGripper	both_ezgripper("/ezgripper/both");
+ // detect_object_client = nh.serviceClient<fcsc_msgs::DetectObject>("detect_object");
+  fcsc_msgs::DetectObject	detect_object_srv;
+  detect_object_srv.request.detect = true;
+  detect_object_srv.request.visualize = true;
+
+	target_pose_stamped.header.frame_id = req.object.name;
+  	target_pose_stamped.pose.position.x = 0;
+  	target_pose_stamped.pose.position.y = 0.01;
+  	target_pose_stamped.pose.position.z = 0.14;
+  	target_pose_stamped.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw( 0, 0, - M_PI/2);
+
+  	target_pose_stamped.header.stamp = ros::Time();
+  	transformPose("base_footprint", target_pose_stamped, test_stamped, listener);
+
+  	move_group.setJointValueTarget(test_stamped);
+  	move_group.setStartStateToCurrentState();
+  	bool success = (bool)move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error1");
+  		return(false);
+  	}
+
+   	success = (bool) move_group.execute(plan);
+	if (!success) {
+		ROS_INFO("execute error1");
+		for ( int i= 1; i <= 3; i++) {
+  			move_group.setStartStateToCurrentState();
+  			move_group.plan(plan);
+  			success = (bool) move_group.execute(plan);
+  			if (!success){
+  				ROS_INFO("execute  error1 %d回目", (int) i+1 );
+  				if (i == 3){
+  				return(false);
+  				}
+  				continue;
+  			} else {
+  				ROS_INFO("execute  success1 %d回目", (int) i+1 );
+  				break;
+  				}
+  			}
+  		} else {
+  			ROS_INFO("execute  success1");
+  	}
+
+  	move_group.attachObject(req.object.name, move_group.getEndEffectorLink(),touch_links_);
+	move_group.setSupportSurfaceName(shelfB_name);
+	both_ezgripper.goToPosition(1.94, 10);
+	move_group2.move();
+
+	move_group.setStartStateToCurrentState();
+	test_stamped.pose.position.z += 0.08;
+	move_group.setJointValueTarget(test_stamped);
+	move_group.setStartStateToCurrentState();
+  	success = (bool)move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error2");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+
+   	success = (bool) move_group.execute(plan);
+	if (!success) {
+		ROS_INFO("execute error2");
+		for ( int i= 1; i <= 3; i++) {
+  			move_group.setStartStateToCurrentState();
+  			move_group.plan(plan);
+  			success = (bool) move_group.execute(plan);
+  			if (!success){
+  				ROS_INFO("execute  error2 %d回目", (int) i+1 );
+  				if (i == 3){
+  				return(false);
+  				}
+  				continue;
+  			} else {
+  				ROS_INFO("execute  success2 %d回目", (int) i+1 );
+  				break;
+  				}
+  			}
+  		} else {
+  			ROS_INFO("execute  success2");
+  	}
+
+
+  	both_ezgripper.goToPosition(0);
+  	move_group2.move();
+  	move_group.detachObject(req.object.name);
+  	moveArm(recover_pose_name);
+      break;
+    }
+     case fcsc_msgs::RecognizedObject::LEFT_SIDE : {
+  ros::AsyncSpinner spinner(1);
+  ros::NodeHandle nh;
+ // tf::TransformListener                   listener;
+ // ros::ServiceClient                      detect_object_client;
+  spinner.start();
+  geometry_msgs::PoseStamped test_stamped;
+  geometry_msgs::PoseStamped target_pose_stamped;
+  std::vector<geometry_msgs::Pose> waypoints;
+  geometry_msgs::PoseStamped current_pose_stamped;
+  geometry_msgs::PoseStamped waypoint_stamped;
+  moveit::planning_interface::MoveGroupInterface::Plan plan;
+  move_group.setMaxVelocityScalingFactor(0.1);
+  // moveit::planning_interface::MoveGroupInterface   move_group("manipulator");
+  moveit::planning_interface::MoveGroupInterface   move_group2("endeffector");
+  EZGripper	both_ezgripper("/ezgripper/both");
+ // detect_object_client = nh.serviceClient<fcsc_msgs::DetectObject>("detect_object");
+  fcsc_msgs::DetectObject	detect_object_srv;
+  detect_object_srv.request.detect = true;
+  detect_object_srv.request.visualize = true;
+
+	target_pose_stamped.header.frame_id = req.object.name;
+  	target_pose_stamped.pose.position.x = 0;
+  	target_pose_stamped.pose.position.y = -0.01;
+  	target_pose_stamped.pose.position.z = 0.14;
+  	target_pose_stamped.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw( 0, 0,  M_PI/2);
+
+  	target_pose_stamped.header.stamp = ros::Time();
+  	transformPose("base_footprint", target_pose_stamped, test_stamped, listener);
+
+  	move_group.setJointValueTarget(test_stamped);
+  	move_group.setStartStateToCurrentState();
+  	bool success = (bool)move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error1");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+
+   	success = (bool) move_group.execute(plan);
+	if (!success) {
+		ROS_INFO("execute error1");
+		for ( int i= 1; i <= 3; i++) {
+  			move_group.setStartStateToCurrentState();
+  			move_group.plan(plan);
+  			success = (bool) move_group.execute(plan);
+  			if (!success){
+  				ROS_INFO("execute  error1 %d回目", (int) i+1 );
+  				if (i == 3){
+  				return(false);
+  				}
+  				continue;
+  			} else {
+  				ROS_INFO("execute  success1 %d回目", (int) i+1 );
+  				break;
+  				}
+
+  			}
+  		} else {
+  			ROS_INFO("execute  success1");
+  	}
+
+  	move_group.attachObject(req.object.name, move_group.getEndEffectorLink(),touch_links_);
+	move_group.setSupportSurfaceName(shelfB_name);
+	both_ezgripper.goToPosition(1.94, 10);
+	move_group2.move();
+
+	move_group.setStartStateToCurrentState();
+	test_stamped.pose.position.z += 0.08;
+	move_group.setJointValueTarget(test_stamped);
+	move_group.setStartStateToCurrentState();
+  	success = (bool)move_group.plan(plan);
+  	if (!success) {
+  		ROS_INFO("plan error2");
+  		move_group.detachObject(req.object.name);
+  		return(false);
+  	}
+
+   	success = (bool) move_group.execute(plan);
+	if (!success) {
+		ROS_INFO("execute  error2");
+		for ( int i= 1; i <= 3; i++) {
+  			move_group.setStartStateToCurrentState();
+  			move_group.plan(plan);
+  			success = (bool) move_group.execute(plan);
+  			if (!success){
+  				ROS_INFO("execute error2 %d回目", (int) i+1 );
+  				if (i == 3){
+  				return(false);
+  				}
+  				continue;
+  			} else {
+  				ROS_INFO("execute success2 %d回目", (int) i+1 );
+  				break;
+  				}
+
+  			}
+  		} else {
+  			ROS_INFO("execute success2");
+  	}
+  	both_ezgripper.goToPosition(0);
+  	move_group2.move();
+  	move_group.detachObject(req.object.name);
+    moveArm(recover_pose_name);
+      break;
+    }
+  }
+  return (true);
+}
+
+// サンドイッチを空きスペースに移動させる
+bool FcscCore::moveSandwichToFreeSpace(fcsc_msgs::Manipulate::Request &req, fcsc_msgs::Manipulate::Response &res)
+{
+  std::vector<visualization_msgs::Marker> baselines;
+  double z_offset = 0.01;
+  bool success;
+
+  // 基準線の設定
+  baselines.resize(3);
+  for (size_t i = 0; i < baselines.size(); i++) {
+    baselines[i].header.frame_id = shelfB_board_name;
+    baselines[i].points.resize(2);
+    baselines[i].points[0].x = 0.01;
+    baselines[i].points[0].y = (3.0 - i) * shelf_width / 6.0;
+    baselines[i].points[1].x = 2.0 * shelf_depth / 3.0;
+    baselines[i].points[1].y = (3.0 - i) * shelf_width / 6.0;
+  }
+
+  // マニピュレーション
+  asyncMoveArm(recover_pose_name);
+
+  // 基準線上のどこかに目標位置を設定して移動
+  for (size_t i = 0; i < baselines.size(); i++) {
+    double particle = 10;
+    geometry_msgs::Vector3 vec;
+
+    vec.x = baselines[i].points[1].x - baselines[i].points[0].x;
+    vec.y = baselines[i].points[1].y - baselines[i].points[0].y;
+
+    success = false;
+    for (double j = 0; j <= particle; j++) {
+      // サンドイッチと棚の干渉チェックをやりたいから、何か処理をここに書く
+      geometry_msgs::PoseStamped target_ee_pose;
+      geometry_msgs::PoseStamped target_object_pose;
+
+      target_object_pose.header.frame_id = shelfB_board_name;
+      target_object_pose.pose.orientation = req.object.pose.pose.orientation;
+      target_object_pose.pose.position.x = baselines[i].points[0].x + j * vec.x / particle;
+      target_object_pose.pose.position.y = baselines[i].points[0].y + j * vec.y / particle;
+      target_object_pose.pose.position.z = req.object.pose.pose.position.z + z_offset;
+
+      target_ee_pose = getPoseStamped(target_object_pose, "grasped_"+req.object.name, move_group.getEndEffectorLink(), listener);
+
+      if (!computeIK(target_ee_pose)) {
+        continue;
+      }
+
+      geometry_msgs::PoseArray waypoints;
+      waypoints.header.frame_id = target_ee_pose.header.frame_id;
+      waypoints.poses.push_back(target_ee_pose.pose);
+      success = moveArmCartesianPath(waypoints.header.frame_id, waypoints.poses, 0.01, 0.0);
+      if (success) {
+        target_ee_pose.pose.position.z -= z_offset;
+        waypoints.poses[0] = target_ee_pose.pose;
+        moveArmCartesianPath(waypoints.header.frame_id, waypoints.poses, 0.01, 0.0, false);
+        break;
+      }
+    }
+    if (success) {
+      break;
+    }
+  }
+
+  releaseObject(req.object.name, 50);
+
+  return (true);
+}
+
+// 空きスペースを作るためにサンドイッチを一箇所に集める
+bool FcscCore::gatherSandwiches(fcsc_msgs::GatherSandwiches::Request &req, fcsc_msgs::GatherSandwiches::Response &res)
+{
+  geometry_msgs::PointStamped gather_point;
+  std::vector<visualization_msgs::Marker> baselines;
+  std::vector<pose_ass_arr> sandwich_pose_ass_arr;
+  double z_offset = 0.01;
+
+  // サンドイッチを一箇所に寄せる場所を決める
+  // V2
+  gather_point.header.frame_id = shelfB_board_name;
+  gather_point.point.x = 0;
+  gather_point.point.y = 0;
+  gather_point.point.z = 0;
+
+  // gather_point.header.frame_id = shelfB_board_name;
+  // gather_point.point.x = 0;
+  // gather_point.point.y = shelf_width;
+  // gather_point.point.z = 0;
+
+  // 基準線の設定
+  baselines.resize(3);
+  for (size_t i = 0; i < baselines.size(); i++) {
+    baselines[i].header.frame_id = shelfB_board_name;
+    baselines[i].points.resize(2);
+
+    // V1
+    // baselines[i].points[0].x = 0;
+    // baselines[i].points[0].y = (5.0 - i) * shelf_width / 6.0;
+    // baselines[i].points[1].x = 2.0 * shelf_depth / 3.0;
+    // baselines[i].points[1].y = (5.0 - i) * shelf_width / 6.0;
+
+    baselines[i].points[0].x = (i + 1) * shelf_depth / 6.0;
+    baselines[i].points[0].y = 0;
+    baselines[i].points[1].x = (i + 1) * shelf_depth / 6.0;;
+    baselines[i].points[1].y = shelf_width;
+  }
+
+  // サンドイッチのピックアップの順番を並べる
+  // サンドイッチの位置を gather_point 基準に変換してからソートする
+  for (size_t i = 0; i < req.sandwiches.size(); i++) {
+    geometry_msgs::PoseStamped ps;
+    transformPose(shelfB_board_name, req.sandwiches[i].pose, ps, listener);
+    ps.pose.position.x = ps.pose.position.x - gather_point.point.x;
+    ps.pose.position.y = ps.pose.position.y - gather_point.point.y;
+    sandwich_pose_ass_arr.push_back( pose_ass_arr(i, ps.pose) );
+  }
+  object_sort_type = OBJECT_SORT_DIST;
+  sort(sandwich_pose_ass_arr.begin(), sandwich_pose_ass_arr.end(), object_sort_less);
+
+  // マニピュレーション
+  for (std::vector<pose_ass_arr>::iterator it = sandwich_pose_ass_arr.begin(); it != sandwich_pose_ass_arr.end(); it++) {
+    fcsc_msgs::Manipulate pickup_sandwich_srv;
+
+    pickup_sandwich_srv.request.object = req.sandwiches[it->first];
+    pickupSandwich(pickup_sandwich_srv.request, pickup_sandwich_srv.response);
+    if (pickup_sandwich_srv.response.success == false) {
+      continue;
+    }
+
+    // 基準点へ移動
+    // geometry_msgs::PoseArray waypoints;
+    // waypoints.header.frame_id = shelfB_board_name;
+    // waypoints.poses.resize(1);
+    // waypoints.poses[0].position.x = gather_point.point.x;
+    // waypoints.poses[0].position.y = gather_point.point.y;
+    // waypoints.poses[0].position.z = getCurrentEEfPose(shelfB_board_name).pose.position.z;
+    // waypoints.poses[0].orientation = getCurrentEEfPose(shelfB_board_name).pose.orientation;
+
+    // 基準線上のどこかに目標位置を設定して移動
+    for (size_t i = 0; i < baselines.size(); i++) {
+      bool success;
+      double particle = 10;
+      geometry_msgs::Vector3 vec;
+
+      vec.x = baselines[i].points[1].x - baselines[i].points[0].x;
+      vec.y = baselines[i].points[1].y - baselines[i].points[0].y;
+
+      success = false;
+      for (double j = 0; j <= particle; j++) {
+        // サンドイッチと棚の干渉チェックをやりたいから、何か処理をここに書く
+        geometry_msgs::PoseStamped target_ee_pose;
+        geometry_msgs::PoseStamped target_object_pose;
+
+        target_object_pose.header.frame_id = shelfB_board_name;
+        target_object_pose.pose.orientation = req.sandwiches[it->first].pose.pose.orientation;
+        target_object_pose.pose.position.x = baselines[i].points[0].x + j * vec.x / particle;
+        target_object_pose.pose.position.y = baselines[i].points[0].y + j * vec.y / particle;
+        target_object_pose.pose.position.z = req.sandwiches[it->first].pose.pose.position.z + z_offset;
+
+        target_ee_pose = getPoseStamped(target_object_pose, "grasped_"+req.sandwiches[it->first].name, move_group.getEndEffectorLink(), listener);
+
+        if (!computeIK(target_ee_pose)) {
+          continue;
+        }
+
+        geometry_msgs::PoseArray waypoints;
+        waypoints.header.frame_id = target_ee_pose.header.frame_id;
+        waypoints.poses.push_back(target_ee_pose.pose);
+        // success = moveArmCartesianPath(waypoints.header.frame_id, waypoints.poses, 0.01, 0.0);
+        success = asyncMoveArm(target_ee_pose);
+        if (success) {
+          target_ee_pose.pose.position.z -= z_offset;
+          waypoints.poses[0] = target_ee_pose.pose;
+          move_group.setMaxVelocityScalingFactor(min_velocity);
+          moveArmCartesianPath(waypoints.header.frame_id, waypoints.poses, 0.01, 0.0, false);
+          move_group.setMaxVelocityScalingFactor(normal_velocity);
+          break;
+        }
+      }
+      if (success) {
+        break;
+      }
+    }
+    releaseObject(req.sandwiches[it->first].name, 50);
+  }
+
+  asyncMoveArm(recover_pose_name);
+
+  return (true);
+}
+
+bool FcscCore::moveInitialPose(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res)
+{
+  waitForExecute();
+
+  if (getCurrentEEfPose("base_footprint").pose.position.x >= 0.4) {
+    asyncMoveArm("fold");
+  }
+
+  res.success = asyncMoveArm(container_center_pose_name);
+
+  // mobile_robot.moveBoard(0.01);
+
+
+  return (true);
+}
+
+bool FcscCore::goToStockingBasePosition(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res)
+{
+  asyncMoveArm(container_center_pose_name);
+
+  waitForExecute();
+
+  // 固定台車位置
+  geometry_msgs::PoseStamped target_base_pos;
+  target_base_pos.header.frame_id = "shelfA";
+  target_base_pos.pose.position.x = -1.2;
+  target_base_pos.pose.position.y = 0.0;
+  target_base_pos.pose.orientation.w = 1.0;
+  mobile_robot.moveOnGlobalCoordinate(target_base_pos);
+  res.success = true;
+
+  // geometry_msgs::PoseStamped pose_in;
+  // geometry_msgs::PoseStamped pose_out;
+  //
+  // pose_in.header.frame_id = "shelfA";
+  // pose_in.pose.orientation.w = 1.0;
+  // transformPose("base_footprint", pose_in, pose_out);
+  // mobile_robot.moveOnRobotCoordinate(pose_out.pose.position.x - 1.2, pose_out.pose.position.y, tf::getYaw(pose_out.pose.orientation));
+
+  Stop(stop);
+
+  return (true);
+}
+
+bool FcscCore::goToFaceupBasePosition(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res)
+{
+  asyncMoveArm(container_center_pose_name);
+
+  waitForExecute();
+
+  geometry_msgs::PoseStamped target_base_pos;
+  target_base_pos.header.frame_id = "shelfB";
+  target_base_pos.pose.position.x = -1.2;
+  target_base_pos.pose.position.y = 0.0;
+  target_base_pos.pose.orientation.w = 1.0;
+  mobile_robot.moveOnGlobalCoordinate(target_base_pos);
+  res.success = true;
+
+  // geometry_msgs::PoseStamped pose_in;
+  // geometry_msgs::PoseStamped pose_out;
+  //
+  // pose_in.header.frame_id = "shelfB";
+  // pose_in.pose.orientation.w = 1.0;
+  // transformPose("base_footprint", pose_in, pose_out);
+  // mobile_robot.moveOnRobotCoordinate(pose_out.pose.position.x - 1.2, pose_out.pose.position.y, tf::getYaw(pose_out.pose.orientation));
+  // mobile_robot.moveBoard(0.01);
+
+  return (true);
+}
+
+bool FcscCore::goToNearShelf(fcsc_msgs::GoToNearShelf::Request &req, fcsc_msgs::GoToNearShelf::Response &res)
+{
+  geometry_msgs::Pose2D goal_2d_pose;
+  geometry_msgs::PoseStamped goal_pose;
+
+  asyncMoveArm(container_center_pose_name);
+
+  waitForExecute();
+
+  // 棚の近くまで移動
+  switch (req.type) {
+    // 棚A(商品陳列作業)
+    case 0:
+            // 相対位置
+            // goal_2d_pose.y = -2.0;//-1.8;
+            // mobile_robot.moveOnRobotCoordinate(goal_2d_pose.x, goal_2d_pose.y, goal_2d_pose.theta);
+
+            // 絶対位置
+            goal_pose.header.frame_id = "map";
+            goal_pose.pose.position.x = 0.4;
+            goal_pose.pose.position.y = 1.55 - (1.92 - 0.95 / 2.0);
+            goal_pose.pose.orientation.w = 1.0;
+            mobile_robot.moveOnGlobalCoordinate(goal_pose);
+            break;
+    case 1: goal_pose.header.frame_id = "shelfA";
+            goal_pose.pose.position.x = -1.4;
+            goal_pose.pose.position.y = 0.0;
+            goal_pose.pose.orientation.w = 1.0;
+            mobile_robot.moveOnGlobalCoordinate(goal_pose);
+            break;
+    // 棚B(廃棄品回収・フェイスアップ作業)
+    case 2:
+            // 相対移動
+            // goal_2d_pose.y = 1.0;
+            // mobile_robot.moveOnRobotCoordinate(goal_2d_pose.x, goal_2d_pose.y, goal_2d_pose.theta);
+
+            // map基準で相対移動
+            goal_pose.header.frame_id = "map";
+            goal_pose.pose.position = mobile_robot.getCurrentBasePose(goal_pose.header.frame_id).pose.position;
+            goal_pose.pose.position.y += 1.0;
+            goal_pose.pose.orientation.w = 1.0;
+            mobile_robot.moveOnGlobalCoordinate(goal_pose);
+
+            // 絶対位置
+            // goal_pose.header.frame_id = "map";
+            // goal_pose.pose.position.x = 0.4;
+            // goal_pose.pose.position.y = 1.2;
+            // goal_pose.pose.orientation.w = 1.0;
+            // mobile_robot.moveOnGlobalCoordinate(goal_pose);
+
+            // mobile_robot.moveBoard(0.09);
+            break;
+    case 3: goal_pose.header.frame_id = "shelfB";
+            goal_pose.pose.position.x = -1.4;
+            goal_pose.pose.position.y = 0.0;
+            goal_pose.pose.orientation.w = 1.0;
+            mobile_robot.moveOnGlobalCoordinate(goal_pose);
+  }
+  res.success = true;
+
+
+  return (true);
+}
+
+bool FcscCore::goToHomePosition(std_srvs::Trigger::Request &req, std_srvs::Trigger::Response &res)
+{
+  ROS_WARN("goToHomePosition");
+
+  if (getCurrentEEfPose("base_footprint").pose.position.x > 0.4) {
+    asyncMoveArm("fold");
+  }
+  asyncMoveArm(container_center_pose_name);
+
+  geometry_msgs::PoseStamped goal_pose;
+
+  goal_pose.header.frame_id = "map";
+  goal_pose.pose.position.x = 0.5 - 1.0;
+  goal_pose.pose.position.y = 1.55 + 0.4 + 0.2;
+  goal_pose.pose.orientation.w = 1.0;
+
+  ROS_WARN("moveOnGlobalCoordinate start");
+  waitForExecute();
+  // mobile_robot.moveOnGlobalCoordinate(mobile_robot.getInitialBasePose());
+  mobile_robot.moveOnGlobalCoordinate(goal_pose);
+  res.success = true;
+  ROS_WARN("moveOnGlobalCoordinate finish");
+
+  return (true);
+}
+
+/*********************************************************************************************/
+
+void FcscCore::getCurrentRobotStateMsg(moveit_msgs::RobotState& robot_state)
+{
+  planning_scene_monitor.requestPlanningSceneState();
+  robot_state::RobotState current_state(planning_scene_monitor.getPlanningScene()->getCurrentStateNonConst());
+  current_state.setJointGroupPositions(move_group.getName(), start_joint_group_positions_);
+  moveit::core::robotStateToRobotStateMsg(current_state, robot_state);
+}
+
+geometry_msgs::PoseStamped FcscCore::getCurrentEEfPose(std::string frame_id)
+{
+  geometry_msgs::PoseStamped ps_in;
+  geometry_msgs::PoseStamped ps_out;
+
+  ps_in = move_group.getCurrentPose();
+  if (ps_in.header.frame_id != frame_id)
+    transformPose(frame_id, ps_in, ps_out, listener);
+  else
+    ps_out = ps_in;
+  return(ps_out);
+}
+
+bool FcscCore::getCurrentObjectPose(std::string object_name, std::string frame_id, geometry_msgs::PoseStamped& object_pose_stamped)
+{
+  moveit_msgs::GetPlanningScene srv;
+  geometry_msgs::PoseStamped pose_stamped_tmp;
+
+  srv.request.components.components =  moveit_msgs::PlanningSceneComponents::WORLD_OBJECT_GEOMETRY;
+  planning_scene_client.call(srv);
+
+  for (int i = 0; i < srv.response.scene.world.collision_objects.size(); i++) {
+    if (srv.response.scene.world.collision_objects[i].id != object_name) {
+      continue;
+    }
+
+    object_pose_stamped.header.frame_id = srv.response.scene.world.collision_objects[i].header.frame_id;
+    if (srv.response.scene.world.collision_objects[i].primitive_poses.size() > 0) {//primiveのとき
+      object_pose_stamped.pose = srv.response.scene.world.collision_objects[i].primitive_poses[0];
+    } else {//meshのとき
+      object_pose_stamped.pose = srv.response.scene.world.collision_objects[i].mesh_poses[0];
+    }
+
+    if (object_pose_stamped.header.frame_id != object_name) {
+      transformPose(frame_id, object_pose_stamped, pose_stamped_tmp, listener);
+      object_pose_stamped = pose_stamped_tmp;
+    }
+
+    return (true);
+  }
+  return (false);
+}
+
+void FcscCore::setStartState()
+{
+  planning_scene_monitor.requestPlanningSceneState();
+  robot_state::RobotState start_state(planning_scene_monitor.getPlanningScene()->getCurrentStateNonConst());
+  start_state.setJointGroupPositions(move_group.getName(), start_joint_group_positions_);
+  move_group.setStartState(start_state);
+}
+
+bool FcscCore::computeIK(geometry_msgs::PoseStamped pose_stamped, moveit_msgs::RobotState robot_state, sensor_msgs::JointState &joint_state, bool avoid_collisions, const moveit_msgs::Constraints &constraints)
+{
+  moveit_msgs::GetPositionIK      ik_srv;
+  moveit_msgs::PositionIKRequest  req;
+
+  req.robot_state = robot_state;
+  req.group_name = move_group.getName();
+  req.avoid_collisions = avoid_collisions;
+  req.pose_stamped = pose_stamped;
+  req.timeout = ros::Duration(0.25);
+  req.constraints = constraints;
+  req.attempts = 1;
+  ik_srv.request.ik_request = req;
+
+  compute_ik_client.call(ik_srv);
+  if (ik_srv.response.error_code.val == moveit_msgs::MoveItErrorCodes::SUCCESS) {
+    joint_state = ik_srv.response.solution.joint_state;
+    return (true);
+  } else {
+    ROS_ERROR("[computeIK]%s", getMoveItErrorCodeString(ik_srv.response.error_code).c_str());
+    return (false);
+  }
+}
+
+bool FcscCore::computeIK(geometry_msgs::PoseStamped pose_stamped, moveit_msgs::RobotState robot_state, const moveit_msgs::Constraints &constraints)
+{
+  sensor_msgs::JointState joint_state;
+  bool avoid_collisions = true;
+  return (computeIK(pose_stamped, robot_state, joint_state, avoid_collisions, constraints));
+}
+
+bool FcscCore::computeIK(geometry_msgs::PoseStamped pose_stamped, bool avoid_collisions, const moveit_msgs::Constraints &constraints)
+{
+  moveit_msgs::RobotState robot_state;
+  sensor_msgs::JointState joint_state;
+
+  getCurrentRobotStateMsg(robot_state);
+  return (computeIK(pose_stamped, robot_state, joint_state, avoid_collisions, constraints));
+}
+
+bool FcscCore::computeIK(geometry_msgs::PoseStamped pose_stamped, sensor_msgs::JointState &joint_state, const moveit_msgs::Constraints &constraints)
+{
+  moveit_msgs::RobotState robot_state;
+  bool avoid_collisions = true;
+
+  getCurrentRobotStateMsg(robot_state);
+  return (computeIK(pose_stamped, robot_state, joint_state, avoid_collisions, constraints));
+}
+
+bool FcscCore::setStockingAreaParams(XmlRpc::XmlRpcValue &params, StockingArea &stocking_area)
+{
+  try
+  {
+    stocking_area.child_frame_id = (string)params["child_frame_id"];
+    stocking_area.parent_frame_id = (string)params["parent_frame_id"];
+    stocking_area.min_corner.x = (double)params["min_corner"]["x"];
+    stocking_area.min_corner.y = (double)params["min_corner"]["y"];
+    stocking_area.max_corner.x = (double)params["max_corner"]["x"];
+    stocking_area.max_corner.y = (double)params["max_corner"]["y"];
+  }
+  catch (XmlRpc::XmlRpcException &ex)
+  {
+    ROS_ERROR("XmlRpc Exception: %s", ex.getMessage().c_str());
+    return false;
+  }
+
+  return true;
+}
+
+bool FcscCore::setScrapSandwichIdParams(XmlRpc::XmlRpcValue &params)
+{
+  try
+  {
+    for (size_t i = 0; i < params.size(); i++) {
+      string s;
+      s = (std::string)params[i];
+      // 小文字を大文字に変換
+      transform(s.begin(), s.end(), s.begin(), ::toupper);
+      scrap_sandwich_ids.push_back(s);
+      // scrap_sandwich_ids.push_back((std::string)params[i]);
+    }
+  }
+  catch (XmlRpc::XmlRpcException &ex)
+  {
+    ROS_ERROR("XmlRpc Exception: %s", ex.getMessage().c_str());
+    return false;
+  }
+  return(true);
+}
+
+geometry_msgs::PoseStamped FcscCore::getTargetPlacePoseFromObject(std::string object_name, geometry_msgs::PoseStamped target_object_pose)
+{
+  geometry_msgs::PoseStamped target_ee_pose;
+
+  //作業座標系基準で目標物体位置を設定した時の手先位置・姿勢を求める
+  target_ee_pose = getPoseStamped(target_object_pose, "grasped_"+object_name, move_group.getEndEffectorLink(), listener);
+
+  return (target_ee_pose);
+}
+
+void FcscCore::setProductPlacement(std::vector<fcsc_msgs::RecognizedObject> objects)
+{
+  int num_bento_A = 0;
+  int num_bento_B = 0;
+  int num_drink_A = 0;
+  int num_drink_B = 0;
+  int num_onigiri_A = 0;
+  int num_onigiri_B = 0;
+
+  onigiri_placement_index[0] = 0;
+  onigiri_placement_index[1] = 0;
+  drink_placement_index[0] = 0;
+  drink_placement_index[1] = 0;
+  bento_placement_index[0] = 0;
+  bento_placement_index[1] = 0;
+
+  // どの種類の商品が何個あるのか数える
+  for (size_t i = 0; i < objects.size(); i++) {
+    int* num_product_A = NULL;
+    int* num_product_B = NULL;
+    switch (objects[i].type) {
+      case fcsc_msgs::RecognizedObject::BENTO : {
+        num_product_A = &num_bento_A;
+        num_product_B = &num_bento_B;
+        break;
+      }
+      case fcsc_msgs::RecognizedObject::DRINK : {
+        num_product_A = &num_drink_A;
+        num_product_B = &num_drink_B;
+        break;
+      }
+      case fcsc_msgs::RecognizedObject::ONIGIRI : {
+        num_product_A = &num_onigiri_A;
+        num_product_B = &num_onigiri_B;
+        break;
+      }
+      default : continue;
+    }
+    if (objects[i].name.find("_A_") != std::string::npos) {
+      ++(*num_product_A);
+    } else {
+      ++(*num_product_B);
+    }
+  }
+
+  object_placements.resize(6);
+
+  // 各商品ごとに配置場所を決める
+  // 弁当
+  // 基準位置の設定
+  geometry_msgs::PoseStamped base_placement;
+
+  double bento_height = 0.045;
+
+  base_placement.header.frame_id = stocking_area[BENTO].child_frame_id;
+  base_placement.pose.position.x = 0.18 / 2.0 + 0.03;
+  base_placement.pose.position.y = 0.9 / 2.0 - 0.2;
+  base_placement.pose.position.z = bento_height;
+  for (size_t i = 0; i < num_bento_A; i++) {
+    geometry_msgs::PoseStamped placement = base_placement;
+    switch (i) {
+      // z = (積んである弁当の厚み) + (弁当の高さの中心) + (オフセット)
+      case 0: placement.pose.position.z = bento_height * 0.0 + bento_height / 2.0 + 0.03; break;
+      case 1: placement.pose.position.z = bento_height * 1.0 + bento_height / 2.0 + 0.03; break;
+      case 2: placement.pose.position.z = bento_height * 2.0 + bento_height / 2.0 + 0.03; break;
+    }
+    object_placements[0].placements.push_back(placement);
+  }
+  // 基準位置の設定
+  base_placement.pose.position.y = 0.9 / 2.0 + 0.2;
+  for (size_t i = 0; i < num_bento_B; i++) {
+    geometry_msgs::PoseStamped placement = base_placement;
+    switch (i) {
+      // z = (積んである弁当の厚み) + (弁当の高さの中心) + (オフセット)
+      case 0: placement.pose.position.z = bento_height * 0.0 + bento_height / 2.0 + 0.03; break;
+      case 1: placement.pose.position.z = bento_height * 1.0 + bento_height / 2.0 + 0.03; break;
+      case 2: placement.pose.position.z = bento_height * 2.0 + bento_height / 2.0 + 0.03; break;
+    }
+    object_placements[1].placements.push_back(placement);
+  }
+
+  // ドリンク
+  // 基準位置の設定
+  base_placement.header.frame_id = stocking_area[DRINK].child_frame_id;
+  base_placement.pose.position.x = 0.08 / 2.0 + 0.02;
+  base_placement.pose.position.y = 0.9 / 2.0 - 0.05;
+  base_placement.pose.position.z = 0.108 / 2.0 + 0.01;
+  for (size_t i = num_drink_A; i > 0; --i) {
+    geometry_msgs::PoseStamped placement = base_placement;
+    placement.pose.position.x += (i - 1) * 0.1;
+    // placement.pose.position.x += (i - 1) * 0.12;
+    object_placements[2].placements.push_back(placement);
+  }
+  // 基準位置の設定
+  base_placement.pose.position.y = 0.9 / 2.0 + 0.1;
+  for (size_t i = num_drink_B; i > 0; --i) {
+    geometry_msgs::PoseStamped placement = base_placement;
+    placement.pose.position.x += (i - 1) * 0.1;
+    // placement.pose.position.x += (i - 1) * 0.12;
+    object_placements[3].placements.push_back(placement);
+  }
+
+  // おにぎり
+  // 基準位置の設定
+  base_placement.header.frame_id = stocking_area[ONIGIRI].child_frame_id;
+  base_placement.pose.position.x = 0.05;
+  base_placement.pose.position.y = 0.9 / 2.0 - 0.1;
+  base_placement.pose.position.z = 0.06 / 2.0 - 0.02;
+  for (size_t i = num_onigiri_A; i > 0; --i) {
+    geometry_msgs::PoseStamped placement = base_placement;
+    placement.pose.position.x += (i - 1) * 0.05;
+    object_placements[4].placements.push_back(placement);
+  }
+  // 基準位置の設定
+  base_placement.pose.position.y = 0.9 / 2.0 + 0.1;
+  for (size_t i = num_onigiri_B; i > 0; --i) {
+    geometry_msgs::PoseStamped placement = base_placement;
+    placement.pose.position.x += (i - 1) * 0.05;
+    object_placements[5].placements.push_back(placement);
+  }
+}
+
+//ドリンク、弁当、おにぎりの順に並べ替える
+void FcscCore::sortOrderPickingProducts(std::vector<std::string> &object_name_v)
+{
+  std::vector<std::string> drink_v;
+  std::vector<std::string> onigiri_v;
+  std::vector<std::string> bento_v;
+
+  for (int i = 0; i < object_name_v.size(); i++) {
+    if (object_name_v[i].find("drink") != std::string::npos) {
+      drink_v.push_back(object_name_v[i]);
+    } else if (object_name_v[i].find("bento") != std::string::npos) {
+      bento_v.push_back(object_name_v[i]);
+    } else if (object_name_v[i].find("onigiri") != std::string::npos) {
+      onigiri_v.push_back(object_name_v[i]);
+    }
+  }
+
+  object_name_v.clear();
+
+  for (int i = 0; i < bento_v.size(); i++) {
+    object_name_v.push_back(bento_v[i]);
+  }
+
+  for (int i = 0; i < drink_v.size(); i++) {
+    object_name_v.push_back(drink_v[i]);
+  }
+
+  for (int i = 0; i < onigiri_v.size(); i++) {
+    object_name_v.push_back(onigiri_v[i]);
+  }
+}
+
+
+// 棚の手前にあるサンドイッチを優先する
+bool FcscCore::sortOrderPickingSandwiches(fcsc_msgs::SortOrderManipulation::Request &req, fcsc_msgs::SortOrderManipulation::Response &res)
+{
+  std::vector<pose_ass_arr> sandwich_pose_ass_arr;
+
+  // 棚の手前付近を優先させるように並べる
+  for (size_t i = 0; i < req.objects.size(); i++) {
+    geometry_msgs::PoseStamped ps;
+    transformPose(shelfB_board_name, req.objects[i].pose, ps, listener);
+    sandwich_pose_ass_arr.push_back( pose_ass_arr(i, ps.pose) );
+  }
+  object_sort_type = OBJECT_SORT_X;
+  sort(sandwich_pose_ass_arr.begin(), sandwich_pose_ass_arr.end(), object_sort_less);
+
+  for (std::vector<pose_ass_arr>::iterator it = sandwich_pose_ass_arr.begin(); it != sandwich_pose_ass_arr.end(); it++) {
+    res.objects.push_back(req.objects[it->first]);
+  }
+
+  return (true);
+}
+
+// 廃棄品のサンドイッチを優先する
+bool FcscCore::sortSandwiches(fcsc_msgs::SortSandwiches::Request &req, fcsc_msgs::SortSandwiches::Response &res)
+{
+  // 廃棄品の回収を優先させる
+  for (size_t i = 0; i < req.sandwiches.size(); i++) {
+    req.sandwiches[i].scrap == true ? res.scrap_sandwiches.push_back(req.sandwiches[i]) : res.normal_sandwiches.push_back(req.sandwiches[i]);
+  }
+
+  return (true);
+}
+
+bool FcscCore::checkGrasp(fcsc_msgs::Grasp& grasp, std::string object_name)
+{
+  geometry_msgs::PoseStamped              target_pose;
+  collision_detection::CollisionRequest   collision_request;
+  collision_detection::CollisionResult    collision_result;
+
+  robot_state::RobotState robot_state(planning_scene_monitor.getPlanningScene()->getCurrentStateNonConst());
+  const robot_state::JointModelGroup* joint_model_group(robot_state.getJointModelGroup(move_group.getName()));
+
+  collision_request.contacts = true;
+  collision_request.group_name = robot_hand.getName();
+  collision_request.max_contacts = 20;
+
+  grasp.grasp_pose.header.frame_id = object_name;
+  grasp.pre_grasp_approach.direction.header.frame_id = object_name;
+
+  transformPose("map", grasp.grasp_pose, target_pose, listener);
+
+  // IKで解があるか確認
+  bool ik_found = robot_state.setFromIK(joint_model_group, target_pose.pose, 1, 0.1);
+  if (!ik_found) {
+    return (false);
+  }
+
+  // 把持位置でグリッパを閉じたとき，グリッパが陳列棚・他のサンドイッチに接触するか確認
+  for (double ee_pos = grasp.pre_grasp_posture.points[0].positions[0]; ee_pos > grasp.grasp_posture.points[0].positions[0];) {
+
+    double ee_joint = robot_hand.jointToPos(ee_pos);
+    robot_state.setVariablePosition("bottom_ezgripper_knuckle_palm_L1_1", ee_joint);
+    robot_state.setVariablePosition("bottom_ezgripper_knuckle_palm_L1_2", ee_joint);
+    robot_state.setVariablePosition("top_ezgripper_knuckle_palm_L1_1", ee_joint);
+    robot_state.setVariablePosition("top_ezgripper_knuckle_palm_L1_2", ee_joint);
+
+    ee_pos -= 10.0;
+    if (ee_pos < grasp.grasp_posture.points[0].positions[0]) {
+      ee_pos = grasp.grasp_posture.points[0].positions[0];
+    }
+
+    // 干渉チェック
+    collision_result.clear();
+    planning_scene_monitor.getPlanningScene()->checkCollision(collision_request, collision_result, robot_state);
+    if (!collision_result.collision) {
+      continue;
+    }
+    // 棚とグリッパとの干渉チェック
+    // 棚とグリッパが接触している場合，その把持姿勢は実行不可能
+    for(collision_detection::CollisionResult::ContactMap::iterator itr = collision_result.contacts.begin(); itr != collision_result.contacts.end(); ++itr) {
+      if ( (itr->first.first.find("ezgripper") == std::string::npos && itr->first.first != object_name) ||
+           (itr->first.second.find("ezgripper") == std::string::npos && itr->first.second != object_name) ) {
+             return (false);
+      }
+    }
+  }
+  return (true);
+}
+
+void FcscCore::getExecutableGrasps(ProductType type, std::string object_name, std::vector<ExecutableGrasp>& executable_grasps)
+{
+  for (size_t i = 0; i < product_grasps[type].grasps.size(); i++) {
+    ExecutableGrasp executable_grasp;
+
+    executable_grasp.grasp = product_grasps[type].grasps[i];
+    executable_grasp.grasp.grasp_pose.header.frame_id = object_name;
+    if (!checkGrasp(executable_grasp.grasp, object_name)) {
+      continue;
+    }
+    transformPose(shelfB_board_name, executable_grasp.grasp.grasp_pose, executable_grasp.target_pose, listener);
+    executable_grasps.push_back(executable_grasp);
+  }
+}
+
+// 把持方向でソートする
+void FcscCore::sortSandwichGrasps(std::string sandwich_name, std::vector<int>& grasp_indices, int manipulation_type)
+{
+  std::vector<ass_arr>                    grasp_cost_map;
+  collision_detection::CollisionRequest   collision_request;
+  collision_detection::CollisionResult    collision_result;
+
+  robot_state::RobotState robot_state(planning_scene_monitor.getPlanningScene()->getCurrentStateNonConst());
+  const robot_state::JointModelGroup* joint_model_group(robot_state.getJointModelGroup(move_group.getName()));
+
+  collision_request.contacts = true;
+  collision_request.group_name = robot_hand.getName();
+  collision_request.max_contacts = 20;
+
+  for (size_t i = 0; i < product_grasps[SANDWICH].grasps.size(); i++) {
+    product_grasps[SANDWICH].grasps[i].grasp_pose.header.frame_id = sandwich_name;
+
+    geometry_msgs::PoseStamped target_pose;
+    transformPose("map", product_grasps[SANDWICH].grasps[i].grasp_pose, target_pose, listener);
+
+    // IKで解があるか確認
+    bool ik_found = robot_state.setFromIK(joint_model_group, target_pose.pose, 1, 0.1);
+    if (!ik_found) {
+      continue;
+    }
+
+    // 把持位置でグリッパを閉じたとき，グリッパが陳列棚・他のサンドイッチに接触するか確認
+    bool is_contact = false;
+    for (double ee_pos = product_grasps[SANDWICH].grasps[i].pre_grasp_posture.points[0].positions[0]; ee_pos > product_grasps[SANDWICH].grasps[i].grasp_posture.points[0].positions[0];) {
+
+      double ee_joint = robot_hand.jointToPos(ee_pos);
+      robot_state.setVariablePosition("bottom_ezgripper_knuckle_palm_L1_1", ee_joint);
+      robot_state.setVariablePosition("bottom_ezgripper_knuckle_palm_L1_2", ee_joint);
+      robot_state.setVariablePosition("top_ezgripper_knuckle_palm_L1_1", ee_joint);
+      robot_state.setVariablePosition("top_ezgripper_knuckle_palm_L1_2", ee_joint);
+
+      ee_pos -= 10.0;
+      if (ee_pos < product_grasps[SANDWICH].grasps[i].grasp_posture.points[0].positions[0]) {
+        ee_pos = product_grasps[SANDWICH].grasps[i].grasp_posture.points[0].positions[0];
+      }
+
+      // 干渉チェック
+      collision_result.clear();
+      planning_scene_monitor.getPlanningScene()->checkCollision(collision_request, collision_result, robot_state);
+      if (!collision_result.collision) {
+        continue;
+      }
+      // 棚とグリッパとの干渉チェック
+      // 棚とグリッパが接触している場合，その把持姿勢は実行不可能
+      for(collision_detection::CollisionResult::ContactMap::iterator itr = collision_result.contacts.begin(); itr != collision_result.contacts.end(); ++itr) {
+        if ( (itr->first.first.find("ezgripper") == std::string::npos && itr->first.first != sandwich_name) ||
+             (itr->first.second.find("ezgripper") == std::string::npos && itr->first.second != sandwich_name) ) {
+          is_contact = true;
+          break;
+        }
+      }
+      if (is_contact) {
+        break;
+      }
+    }
+    if (is_contact) {
+      continue;
+    }
+
+    // map座標系のz軸とmap基準の把持姿勢のz軸の内積を計算
+    // Transform設定
+    tf::Transform grasp_tf(tf::Quaternion(target_pose.pose.orientation.x, target_pose.pose.orientation.y, target_pose.pose.orientation.z, target_pose.pose.orientation.w), tf::Vector3(target_pose.pose.position.x, target_pose.pose.position.y, target_pose.pose.position.z));
+
+    // Matrix3x3設定
+    tf::Matrix3x3 grasp_matrix(grasp_tf.getRotation().normalized());
+
+    // map座標系のz軸と，把持方向(x軸)との内積をとる
+    double cost = grasp_matrix.tdotx(tf::Vector3(0, 0, 1.0));
+
+    // (index,可操作度)のペアでデータ構造に格納
+    grasp_cost_map.push_back(ass_arr(i, cost));
+  }
+
+  // 昇順
+  // cost最小（手先が地面に対して垂直な姿勢）のものを優先する
+  sort(grasp_cost_map.begin(), grasp_cost_map.end(), sort_less);
+
+  grasp_indices.clear();
+  for (std::vector<ass_arr>::iterator it = grasp_cost_map.begin(); it != grasp_cost_map.end(); it++) {
+    grasp_indices.push_back(it->first);
+  }
+
+  // フェイスアップの場合はフィルムを掴む把持姿勢を優先する
+  if (manipulation_type == fcsc_msgs::Manipulate::Request::FACEUP) {
+    std::vector<int> film_grasp_indices;
+    std::vector<int> body_grasp_indices;
+    for (size_t i = 0; i < grasp_indices.size(); i++) {
+      if (product_grasps[SANDWICH].grasps[grasp_indices[i]].id.find("film") == std::string::npos) {
+        body_grasp_indices.push_back(grasp_indices[i]);
+      } else {
+        film_grasp_indices.push_back(grasp_indices[i]);
+      }
+    }
+    grasp_indices.clear();
+    std::copy(film_grasp_indices.begin(), film_grasp_indices.end(), back_inserter(grasp_indices));
+    grasp_indices.insert(grasp_indices.end(), body_grasp_indices.begin(), body_grasp_indices.end());
+  }
+}
+
+bool FcscCore::graspObject(std::string object_name, double joint_position, double effort, int control)
+{
+  waitForExecute();
+
+  bool result = true;
+  result = attachObject(object_name, attach_detach_type);
+  result &= robot_hand.move(joint_position, effort, control);
+  return (result);
+}
+
+bool FcscCore::releaseObject(std::string object_name, double joint_position, double effort)
+{
+  waitForExecute();
+
+  bool result;
+  result = detachObject(object_name, attach_detach_type);
+  result &= robot_hand.move(joint_position, effort);
+  return (result);
+}
+
+bool FcscCore::attachObject(std::string object_name, std::string type)
+{
+  gazebo_ros_link_attacher::Attach attach_detach_srv;
+  std::string link_name;
+  bool success = true;
+
+  if ( (type.find("moveit") != std::string::npos) || (type.find("both") != std::string::npos) ) {
+    success *= move_group.attachObject(object_name, move_group.getEndEffectorLink(), touch_links_);
+  }
+  if (  (type.find("gazebo") != std::string::npos) || (type.find("both") != std::string::npos) ) {
+    if (object_name.find("onigiri") != std::string::npos) {
+      link_name = "onigiri";
+    } else if (object_name.find("bento") != std::string::npos) {
+      link_name = "bento";
+    } else if (object_name.find("drink") != std::string::npos) {
+      link_name = "drink";
+    } else if (object_name.find("sandwich") != std::string::npos) {
+      link_name = "sandwich";
+    }
+
+    attach_detach_srv.request.model_name_1 = robot_name;
+    attach_detach_srv.request.link_name_1 = attach_link;
+    attach_detach_srv.request.model_name_2 = object_name;
+    attach_detach_srv.request.link_name_2 = link_name;
+    link_attacher_client.call(attach_detach_srv);
+    success *= attach_detach_srv.response.ok;
+  }
+
+  return (success);
+}
+
+
+bool FcscCore::detachObject(std::string object_name, std::string type)
+{
+  gazebo_ros_link_attacher::Attach attach_detach_srv;
+  std::string link_name;
+  bool success = true;
+
+  if (type.find("moveit") != std::string::npos || type.find("both") != std::string::npos) {
+    success *= move_group.detachObject(object_name);
+  }
+  if (type.find("gazebo") != std::string::npos || type.find("both") != std::string::npos) {
+    if (object_name.find("onigiri") != std::string::npos) {
+      link_name = "onigiri";
+    } else if (object_name.find("bento") != std::string::npos) {
+      link_name = "bento";
+    } else if (object_name.find("drink") != std::string::npos) {
+      link_name = "drink";
+    }
+    attach_detach_srv.request.model_name_1 = robot_name;
+    attach_detach_srv.request.link_name_1 = attach_link;
+    attach_detach_srv.request.model_name_2 = object_name;
+    attach_detach_srv.request.link_name_2 = link_name;
+    link_detacher_client.call(attach_detach_srv);
+    success *= attach_detach_srv.response.ok;
+  }
+
+  return (success);
+}
+
+bool FcscCore::planArm(moveit::planning_interface::MoveGroupInterface::Plan& plan, int attempts)
+{
+  ROS_INFO("planArm");
+  moveit_msgs::MoveItErrorCodes error_code;
+  bool found_trjectory = false;
+
+  waitForExecute();
+
+  for (size_t i = 0; i < attempts; i++) {
+    moveit::planning_interface::MoveGroupInterface::Plan current_plan;
+
+    move_group.setStartStateToCurrentState();
+    error_code = move_group.plan(current_plan);
+    if (error_code.val != moveit_msgs::MoveItErrorCodes::SUCCESS) {
+      ROS_ERROR("[planArm]%s", getMoveItErrorCodeString(error_code).c_str());
+      continue;
+    }
+
+    // アームを振り回す軌道を避けるため、実行時間が短い軌道を選ぶ
+    if (!found_trjectory ||
+        current_plan.trajectory_.joint_trajectory.points.back().time_from_start < plan.trajectory_.joint_trajectory.points.back().time_from_start) {
+      plan = current_plan;
+      found_trjectory = true;
+    }
+  }
+
+  return (found_trjectory);
+}
+
+bool FcscCore::asyncPlanArm(moveit::planning_interface::MoveGroupInterface::Plan& plan, int attempts)
+{
+  ROS_INFO("asyncPlanArm");
+
+  moveit_msgs::MoveItErrorCodes error_code;
+  bool found_trjectory = false;
+
+  setStartState();
+
+  for (size_t i = 0; i < attempts; i++) {
+    moveit::planning_interface::MoveGroupInterface::Plan current_plan;
+
+    error_code = move_group.plan(current_plan);
+    if (error_code.val != moveit_msgs::MoveItErrorCodes::SUCCESS) {
+      ROS_ERROR("[asyncPlanArm]:%s", getMoveItErrorCodeString(error_code).c_str());
+      continue;
+    }
+
+    // アームを振り回す軌道を避けるため、実行時間が短い軌道を選ぶ
+    if (!found_trjectory ||
+        current_plan.trajectory_.joint_trajectory.points.back().time_from_start < plan.trajectory_.joint_trajectory.points.back().time_from_start) {
+      plan = current_plan;
+      found_trjectory = true;
+    }
+  }
+
+  return (found_trjectory);
+}
+
+bool FcscCore::waitForExecute()
+{
+  ROS_INFO("[waitForExecute]:Start");
+
+  ros::Rate loop_rate(10);
+  while (is_executing_) {
+    loop_rate.sleep();
+  }
+
+  ROS_INFO("[waitForExecute]:Finish");
+
+  if (timeup_) {
+    ROS_WARN("[waitForExecute]:Time's up!!!!. Go home.");
+    move_group.setMaxVelocityScalingFactor(min_velocity);
+    move_group.setNamedTarget("fold");
+    move_group.move();
+    move_group.setNamedTarget(container_center_pose_name);
+    move_group.move();
+    robot_hand.move(100);
+    geometry_msgs::PoseStamped goal_pose;
+    goal_pose.header.frame_id = "map";
+    goal_pose.pose.position.x = 0.5;
+    goal_pose.pose.position.y = 1.55 + 0.4 + 0.2;
+    goal_pose.pose.orientation.w = 1.0;
+    mobile_robot.moveOnGlobalCoordinate(goal_pose);
+    exit(-1);
+  }
+
+  if (!is_succeeded_) {
+    ROS_ERROR("[waitForExecute]:Execution failed");
+    move_group.getCurrentState()->copyJointGroupPositions(move_group.getName(), start_joint_group_positions_);
+    is_succeeded_ = true;
+    return (false);
+  }
+  return (true);
+}
+
+bool FcscCore::executeArm(moveit::planning_interface::MoveGroupInterface::Plan plan, int attemps)
+{
+  ROS_INFO("executeArm");
+  moveit_msgs::MoveItErrorCodes error_code;
+
+  if (!isTrajectoryContinuous(plan.trajectory_)) {
+    ROS_ERROR("Trajectory is Not continuous");
+  }
+
+  moveit_msgs::DisplayTrajectory display_trajectory;
+  display_trajectory.trajectory_start = plan.start_state_;
+  display_trajectory.trajectory.push_back(plan.trajectory_);
+  display_trajectory_publisher.publish(display_trajectory);
+
+  waitForExecute();
+
+  for (size_t i = 0; i < attemps; i++) {
+    Stop(stop);
+    error_code = move_group.execute(plan);
+    if (error_code.val != moveit_msgs::MoveItErrorCodes::SUCCESS) {
+      ROS_ERROR("[executeArm]%s", getMoveItErrorCodeString(error_code).c_str());
+      continue;
+    }
+    std::vector<double> current_joint_group_positions = plan.trajectory_.joint_trajectory.points[plan.trajectory_.joint_trajectory.points.size()-1].positions;
+    start_joint_group_positions_ = current_joint_group_positions;
+    return (true);
+  }
+  return (false);
+}
+
+bool FcscCore::asyncExecuteArm(moveit::planning_interface::MoveGroupInterface::Plan plan)
+{
+  ROS_INFO("asyncExecuteArm");
+
+  if (!isTrajectoryContinuous(plan.trajectory_)) {
+    ROS_ERROR("Trajectory is Not continuous");
+  }
+
+  moveit_msgs::DisplayTrajectory display_trajectory;
+  display_trajectory.trajectory_start = plan.start_state_;
+  display_trajectory.trajectory.push_back(plan.trajectory_);
+  display_trajectory_publisher.publish(display_trajectory);
+
+  if (!waitForExecute()) {
+    return (false);
+  }
+
+  std::vector<double> current_joint_group_positions = plan.trajectory_.joint_trajectory.points[plan.trajectory_.joint_trajectory.points.size()-1].positions;
+  start_joint_group_positions_ = current_joint_group_positions;
+
+  Stop(stop);
+
+  move_group.asyncExecute(plan);
+  is_executing_ = true;
+
+  return (true);
+}
+
+bool FcscCore::planAndExecuteArm(int plan_attempts, int execute_attemps)
+{
+  ROS_INFO("planAndExecuteArm");
+  moveit::planning_interface::MoveGroupInterface::Plan plan;
+
+  // 計画パート
+  if (!planArm(plan, plan_attempts)) {
+    return (false);
+  }
+
+  // 実行パート
+  return (executeArm(plan, execute_attemps));
+}
+
+bool FcscCore::setTargetPose(geometry_msgs::PoseStamped pose_stamped)
+{
+  ROS_INFO("setTargetPose");
+
+  geometry_msgs::PoseStamped target_pose_stamped;
+  geometry_msgs::PoseStamped visualize_pose_stamped;
+
+  // 目標手先位置を矢印で描画
+  if (pose_stamped.header.frame_id != visual_frame_id_) {
+    transformPose(visual_frame_id_, pose_stamped, visualize_pose_stamped, listener);
+  } else {
+    visualize_pose_stamped = pose_stamped;
+  }
+  visual_tools->publishArrow(visualize_pose_stamped.pose, rviz_visual_tools::RED, rviz_visual_tools::LARGE);
+  visual_tools->trigger();
+
+  if (pose_stamped.header.frame_id != "base_footprint") {
+    transformPose("base_footprint", pose_stamped, target_pose_stamped, listener);
+  } else {
+    target_pose_stamped = pose_stamped;
+  }
+
+  if (!move_group.setJointValueTarget(target_pose_stamped)) {
+    ROS_ERROR("setTargetPose");
+    return (false);
+  }
+  return (true);
+}
+
+bool FcscCore::moveArm(geometry_msgs::PoseStamped pose_stamped)
+{
+  ROS_INFO("moveArm");
+
+  if (!setTargetPose(pose_stamped)) {
+    return (false);
+  }
+
+  return (planAndExecuteArm());
+}
+
+bool FcscCore::moveArm(string target_name)
+{
+  ROS_INFO("moveArm [%s]", target_name.c_str());
+
+  if (!move_group.setNamedTarget(target_name)) {
+    ROS_ERROR("Error[moveArm]:setJointValueTarget");
+    return (false);
+  }
+
+  return (planAndExecuteArm());
+}
+
+bool FcscCore::asyncMoveArm(string target_name)
+{
+  ROS_INFO("[asyncMoveArm]:pose name [%s]", target_name.c_str());
+
+  moveit::planning_interface::MoveGroupInterface::Plan plan;
+
+  if (!move_group.setNamedTarget(target_name)) {
+    ROS_ERROR("[asyncMoveArm]:setNamedTarget");
+    return (false);
+  }
+
+  if (!asyncPlanArm(plan)) {
+    ROS_ERROR("[asyncPlanArm]");
+    return (false);
+  }
+
+  return (asyncExecuteArm(plan));
+}
+
+bool FcscCore::asyncMoveArm(geometry_msgs::PoseStamped pose_stamped, int plan_attempts)
+{
+  ROS_INFO("asyncMoveArm");
+  moveit::planning_interface::MoveGroupInterface::Plan plan;
+
+  if (!setTargetPose(pose_stamped)) {
+    return (false);
+  }
+
+  if (!asyncPlanArm(plan, plan_attempts)) {
+    return (false);
+  }
+
+  return (asyncExecuteArm(plan));
+}
+
+bool FcscCore::moveArmCartesianPath(std::string frame_id, std::vector<geometry_msgs::Pose> waypoints, double eef_step, double jump_threshold, bool avoid_collisions, int planning_num, double valid_fraction)
+{
+  ROS_INFO("moveArmCartesianPath");
+  moveit_msgs::Constraints path_constraints_tmp;
+
+  return (moveArmCartesianPath(frame_id, waypoints,eef_step, jump_threshold, path_constraints_tmp, avoid_collisions, planning_num, valid_fraction));
+}
+
+bool FcscCore::moveArmCartesianPath(std::string frame_id, std::vector<geometry_msgs::Pose> waypoints, double eef_step, double jump_threshold, moveit_msgs::Constraints path_constraints, bool avoid_collisions, int planning_num, double valid_fraction)
+{
+  ROS_INFO("moveArmCartesianPath(constraint)");
+
+  moveit::planning_interface::MoveGroupInterface::Plan plan;
+  moveit_msgs::MoveItErrorCodes error_code;
+
+  if (planning_num <= 0) {
+    planning_num = 5;
+  }
+
+  waitForExecute();
+
+  move_group.setPoseReferenceFrame(frame_id);
+  for (int i = 0; i < planning_num; i++) {
+    move_group.setStartStateToCurrentState();
+    double fraction = move_group.computeCartesianPath(waypoints, eef_step, jump_threshold, plan.trajectory_, path_constraints, avoid_collisions, &error_code);
+    if (fraction < valid_fraction) {
+      ROS_ERROR("moveArmCartesianPath:failed %.2f%% acheived code[%s]", fraction * 100.0, getMoveItErrorCodeString(error_code).c_str());
+      continue;
+    }
+    ROS_INFO("moveArmCartesianPath:%.2f%% acheived",fraction * 100.0);
+    if (!isTrajectoryContinuous(plan.trajectory_)) {
+      ROS_ERROR("Trajectory is Not continuous");
+      return (false);
+    }
+    Stop(stop);
+    error_code = move_group.asyncExecute(plan);
+    is_executing_ = true;
+    if (error_code.val != moveit_msgs::MoveItErrorCodes::SUCCESS) {
+      ROS_ERROR("[moveArmCartesianPath]execute [%s]", getMoveItErrorCodeString(error_code).c_str());
+      move_group.stop();
+      continue;
+    }
+    for (size_t j = 0; j < plan.trajectory_.joint_trajectory.points[plan.trajectory_.joint_trajectory.points.size()-1].positions.size(); j++) {
+      start_joint_group_positions_[j] = plan.trajectory_.joint_trajectory.points[plan.trajectory_.joint_trajectory.points.size()-1].positions[j];
+    }
+    return (true);
+  }
+  ROS_ERROR("moveArmCartesianPath:failed");
+  return (false);
+}
+
+// 掴んだ物体を棚に置けなかったときは諦めてコンテナに戻す。
+bool FcscCore::returnObjectToContainer(fcsc_msgs::RecognizedObject object)
+{
+  geometry_msgs::PoseArray waypoints;
+  geometry_msgs::Pose waypoint;
+  geometry_msgs::PoseStamped target_pose;
+  geometry_msgs::PoseStamped current_pose;
+  double z_offset = 0.1;
+
+  target_pose = getPoseStamped(object.pose, "grasped_"+object.name, move_group.getEndEffectorLink(), listener);
+
+  target_pose.pose.position.z += z_offset;
+
+  asyncMoveArm(target_pose);
+
+  waypoints.header.frame_id = target_pose.header.frame_id;
+  waypoint = target_pose.pose;
+  waypoint.position.z -= z_offset;
+  waypoints.poses.push_back(waypoint);
+
+  moveArmCartesianPath(waypoints.header.frame_id, waypoints.poses, 0.01, 0.0, false);
+
+  double current_joint_pos;
+
+  if (robot_hand.jointToPos(robot_hand.getCurrentJointValues()[0]) < robot_hand.jointToPos(robot_hand.getCurrentJointValues()[1])) {
+    current_joint_pos = robot_hand.jointToPos(robot_hand.getCurrentJointValues()[0]);
+  } else {
+    current_joint_pos = robot_hand.jointToPos(robot_hand.getCurrentJointValues()[1]);
+  }
+
+  releaseObject(object.name, current_joint_pos + 20);
+  fcsc_visual_tools.contactProduct(object.name, "container", object.pose);
+  return (true);
+}
+
+bool FcscCore::isTrajectoryContinuous(moveit_msgs::RobotTrajectory trajectory)
+{
+
+  double threshold_rad = 100.0 * M_PI / 180.0;
+
+  for (size_t i = 1; i < trajectory.joint_trajectory.points.size(); i++) {
+    for (size_t j = 0; j < trajectory.joint_trajectory.points[0].positions.size(); j++) {
+      double joint_position = trajectory.joint_trajectory.points[i].positions[j];
+      double pre_joint_position = trajectory.joint_trajectory.points[i - 1].positions[j];
+
+      // 一つ前の関節位置と比較，しきい値以上変化があるなら不連続
+      if (abs(joint_position - pre_joint_position) >= threshold_rad) {
+        return (false);
+      }
+    }
+  }
+  return (true);
+}
+
+bool FcscCore::setTouchLinksParams(XmlRpc::XmlRpcValue &params)
+{
+  try
+  {
+    for (int i = 0; i < params.size(); i++) {
+      touch_links_.push_back(params[i]);
+    }
+  }
+  catch (XmlRpc::XmlRpcException &ex)
+  {
+
+    ROS_ERROR("XmlRpc Exception: %s", ex.getMessage().c_str());
+    return false;
+  }
+  return true;
+}
+
+void FcscCore::serverStart()
+{
+  ROS_INFO("server start");
+
+  ros::AsyncSpinner spinner(2);
+  ros::Rate loop_rate_100hz(100);
+  spinner.start();
+
+  // 現在の関節位置設定
+  move_group.getCurrentState()->copyJointGroupPositions(move_group.getName(), start_joint_group_positions_);
+
+  ros::Rate loop_rate_10hz(10);
+  for (size_t i = 0; i < 2; i++) {
+    std_msgs::Bool msg;
+    msg.data = false;
+    enable_shelf_detection_publisher.publish(msg);
+    enable_object_detection_publisher.publish(msg);
+    loop_rate_10hz.sleep();
+  }
+
+  while (ros::ok()) {
+    loop_rate_100hz.sleep();
+  }
+}
+
+int main(int argc, char **argv) {
+  ros::init (argc, argv, "fcsc_moveit_core");
+  ros::NodeHandle private_nh("~");
+  ros::NodeHandle nh;
+  string group_name;
+  string ee_name;
+
+  private_nh.setParam("attach_link", "wrist_3_link");
+  private_nh.param<std::string>("group_name", group_name, "manipulator");
+  private_nh.param<std::string>("ee_name", ee_name, "endeffector");
+  private_nh.param<bool>("stop", stop, false);
+
+  FcscCore fcsc_core(group_name, ee_name);
+  fcsc_core.serverStart();
+
+  return 0;
+}

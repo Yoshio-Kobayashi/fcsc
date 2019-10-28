@@ -1,0 +1,4 @@
+#empty
+int8 pattern
+---
+string[] detected_shelf_names

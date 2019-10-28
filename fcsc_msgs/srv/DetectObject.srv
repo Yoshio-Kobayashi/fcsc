@@ -1,0 +1,10 @@
+string[] delete_object_names
+bool clear
+bool detect
+bool visualize
+bool damy
+#string[] contact_object_names
+#string support_surface_name
+---
+bool success
+fcsc_msgs/RecognizedObjectArray detected_object_array

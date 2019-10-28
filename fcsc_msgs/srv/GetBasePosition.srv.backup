@@ -1,0 +1,11 @@
+moveit_msgs/WorkspaceParameters[]  target_rectangles
+geometry_msgs/PoseStamped[] target_poses
+moveit_msgs/Grasp[] target_grasps
+
+# int32 type
+# int32 INDIVIDUAL = 0
+# int32 PARTIAL    = 1
+# int32 GLOBAL     = 2
+---
+bool success
+geometry_msgs/Pose2D base_position
