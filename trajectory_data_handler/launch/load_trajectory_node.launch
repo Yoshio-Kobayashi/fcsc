@@ -1,0 +1,5 @@
+<launch>
+  <node name="load_trajectory_node" pkg="trajectory_data_handler" type="load_trajectory_node" output="screen">
+    <rosparam command="load" file="$(find hierarchical_trajectory_database)/config/drink_trajectory_file_list.yaml"/>
+  </node>
+</launch>
