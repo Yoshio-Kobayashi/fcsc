@@ -1,0 +1,172 @@
+# FCSC 2018
+stocking_area:
+  bento:
+    parent_frame_id: shelfA_board_1
+    child_frame_id: bento_area
+    position:
+      x: 0.0
+      y: 0.0
+    min_corner:
+      x: 0.0
+      y: 0.0
+    max_corner:
+      x: 0.4
+      y: 0.9
+
+  drink:
+    parent_frame_id: shelfA_board_2
+    child_frame_id: drink_area
+    position:
+      x: 0.0
+      y: 0.0
+    min_corner:
+      x: 0.0
+      y: 0.0
+    max_corner:
+      x: 0.4
+      y: 0.9
+
+  onigiri:
+    parent_frame_id: shelfA_board_3
+    child_frame_id: onigiri_area
+    position:
+      x: 0.0
+      y: 0.0
+    min_corner:
+      x: 0.0
+      y: 0.0
+    max_corner:
+      x: 0.4
+      y: 0.9
+
+  sandwich:
+    parent_frame_id: shelfB_board_2
+    child_frame_id: sandwich_area
+    position:
+      x: 0.0
+      y: 0.0
+    min_corner:
+      x: 0.0
+      y: 0.0
+    max_corner:
+      x: 0.4
+      y: 0.9
+
+# FCSC 2017
+# stocking_area:
+#   drink:
+#     parent_frame_id: shelfA_lower
+#     # child_frame_id: drink
+#     child_frame_id: shelf_lower_drink
+#     position:
+#       x: -0.2
+#       y: -0.45
+#       # y: -0.45
+#     min_corner:
+#       x: 0.0
+#       y: 0.0
+#     max_corner:
+#       x: 0.2
+#       y: 0.3
+#       # x: 0.4
+#       # y: 0.2
+#
+#   bento:
+#     parent_frame_id: shelfA_lower
+#     # child_frame_id: bento
+#     child_frame_id: shelf_lower_bento
+#     position:
+#       x: -0.2
+#       y: -0.15
+#       # y: -0.15
+#     min_corner:
+#       x: 0.0
+#       y: 0.0
+#     max_corner:
+#       # x: 0.4
+#       x: 0.2
+#       y: 0.3
+#
+#   onigiri:
+#     parent_frame_id: shelfA_lower
+#     # child_frame_id: onigiri
+#     child_frame_id: shelf_lower_onigiri
+#     position:
+#       x: -0.2
+#       y: 0.15
+#       # y: 0.25
+#     min_corner:
+#       x: 0.0
+#       y: 0.0
+#     max_corner:
+#       # x: 0.4
+#       x: 0.2
+#       y: 0.3
+#
+#   sandwich:
+#     parent_frame_id: shelfB_lower
+#     # child_frame_id: sandwich
+#     child_frame_id: shelf_lower_sandwich
+#     position:
+#       x: -0.2
+#       y: -0.45
+#     min_corner:
+#       x: 0.0
+#       y: 0.0
+#     max_corner:
+#       x: 0.2
+#       y: 0.8
+
+# KDEL(F507)
+# stocking_area:
+#   drink:
+#     parent_frame_id: shelfA_lower
+#     child_frame_id: shelf_lower_drink
+#     position:
+#       x: -0.1885
+#       y: -0.427
+#     min_corner:
+#       x: 0.0
+#       y: 0.0
+#     max_corner:
+#       x: 0.1885
+#       y: 0.284
+#
+#   bento:
+#     parent_frame_id: shelfA_lower
+#     child_frame_id: shelf_lower_bento
+#     position:
+#       x: -0.1885
+#       y: -0.142
+#     min_corner:
+#       x: 0.0
+#       y: 0.0
+#     max_corner:
+#       x: 0.1885
+#       y: 0.284
+#
+#   onigiri:
+#     parent_frame_id: shelfA_lower
+#     child_frame_id: shelf_lower_onigiri
+#     position:
+#       x: -0.1885
+#       y: 0.142
+#     min_corner:
+#       x: 0.0
+#       y: 0.0
+#     max_corner:
+#       x: 0.1885
+#       y: 0.284
+#
+#   sandwich:
+#     parent_frame_id: shelfB_lower
+#     child_frame_id: shelf_lower_sandwich
+#     position:
+#       x: -0.1885
+#       y: -0.427
+#     min_corner:
+#       x: 0.0
+#       y: 0.0
+#     max_corner:
+#       x: 0.1885
+#       y: -0.427

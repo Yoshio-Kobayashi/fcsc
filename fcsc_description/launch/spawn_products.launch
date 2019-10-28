@@ -1,0 +1,6 @@
+<!-- world -->
+<launch>
+  <include file="$(find fcsc_description)/launch/spawn_onigiri.launch"/>
+  <include file="$(find fcsc_description)/launch/spawn_drink.launch"/>
+  <include file="$(find fcsc_description)/launch/spawn_bento.launch"/>
+</launch>

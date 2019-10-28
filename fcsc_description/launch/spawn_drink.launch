@@ -1,0 +1,74 @@
+<launch>
+  <!-- FCSC 2018 -->
+  <include file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="0" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="spawn_objects_urdf.launch" />
+    <arg name="value" value="
+    xacro:=true
+    use_ar_marker:=true
+    marker_id:=1
+    model:=$(find fcsc_description)/model/drink.urdf.xacro
+    name:=drink_1
+    x:=0.15
+    y:=-0.2
+    z:=0.06
+    Y:=3.141592
+    frame:=daihen_ur5::container"/>
+    <arg name="node_name" value="spawn_drink_1"/>
+  </include>
+
+  <include file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="0" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="spawn_objects_urdf.launch" />
+    <arg name="value" value="
+    xacro:=true
+    use_ar_marker:=true
+    marker_id:=2
+    model:=$(find fcsc_description)/model/drink.urdf.xacro
+    name:=drink_2
+    x:=0.05
+    y:=-0.2
+    z:=0.06
+    Y:=3.141592
+    frame:=daihen_ur5::container"/>
+    <arg name="node_name" value="spawn_drink_2"/>
+  </include>
+
+  <include file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="0" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="spawn_objects_urdf.launch" />
+    <arg name="value" value="
+    xacro:=true
+    use_ar_marker:=true
+    marker_id:=3
+    model:=$(find fcsc_description)/model/drink.urdf.xacro
+    name:=drink_3
+    x:=-0.05
+    y:=-0.2
+    z:=0.06
+    Y:=3.141592
+    frame:=daihen_ur5::container"/>
+    <arg name="node_name" value="spawn_drink_3"/>
+  </include>
+
+  <include file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="0" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="spawn_objects_urdf.launch" />
+    <arg name="value" value="
+    xacro:=true
+    use_ar_marker:=true
+    marker_id:=4
+    model:=$(find fcsc_description)/model/drink.urdf.xacro
+    name:=drink_4
+    x:=-0.15
+    y:=-0.2
+    z:=0.06
+    Y:=3.141592
+    frame:=daihen_ur5::container"/>
+    <arg name="node_name" value="spawn_drink_4"/>
+  </include>
+</launch>

@@ -1,0 +1,30 @@
+<!-- world -->
+<launch>
+  <arg name="parent_frame" default="world"/>
+  <arg name="name" default="sandwich"/>
+  <arg name="x" default="2.0"/>
+  <arg name="y" default="0"/>
+  <arg name="yaw" default="0"/>
+
+  <param name="sandwich/x" value="$(arg x)"/>
+  <param name="sandwich/y" value="$(arg y)"/>
+  <param name="sandwich/z" value="0"/>
+  <param name="sandwich/yaw" value="$(arg yaw)"/>
+
+  <include file="$(find fcsc_description)/launch/spawn_objects_urdf.launch">
+    <arg name="xacro" value="true"/>
+    <arg name="sandwich" value="true"/>
+    <arg name="use_label" value="false"/>
+    <arg name="use_ar_marker" value="false"/>
+    <arg name="frame" value="$(arg parent_frame)"/>
+    <arg name="name" value="$(arg name)"/>
+    <!-- <arg name="model" value="$(find fcsc_description)/model/sandwich.urdf.xacro"/> -->
+    <arg name="model" value="$(find fcsc_description)/model/sandwich2.urdf.xacro"/>
+    <arg name="x" value="$(arg x)"/>
+    <arg name="y" value="$(arg y)"/>
+    <arg name="Y" value="$(arg yaw)"/>
+  </include>
+
+  <!-- <node pkg="tf" type="static_transform_publisher" name="virtual_joint_broadcaster_0" args="$(arg x) $(arg y) 0 $(arg yaw) 0 0 $(arg parent_frame)  $(arg name) 100" /> -->
+
+</launch>

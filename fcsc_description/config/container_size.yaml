@@ -1,0 +1,16 @@
+container_size:
+  get_container_pose: true
+  long_side:  0.72
+  short_side: 0.46
+  height:     0.13
+  pose:
+    header:
+      frame_id: container
+    position:
+      x: 0
+      y: 0
+      z: 0
+    orientation:
+      r: 0
+      p: 0
+      y: 0

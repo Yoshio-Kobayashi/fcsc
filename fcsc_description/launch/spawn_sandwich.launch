@@ -1,0 +1,113 @@
+<!-- world -->
+<launch>
+  <arg name="parent_frame" default="shelfA::shelf_base"/>
+  <arg name="marker_size" default="5"/>
+
+  <include file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="0" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="spawn_objects_urdf.launch" />
+    <arg name="value" value="
+    xacro:=true
+    sandwich:=true
+    use_ar_marker:=true
+    marker_id:=40
+    marker_size:=$(arg marker_size)
+    use_label:=false
+    label_id:=A
+    model:=$(find fcsc_description)/model/sandwich2.urdf.xacro
+    name:=sandwich_A
+    x:=0.0
+    y:=0.0
+    z:=0.8
+    Y:=0.76
+    frame:=$(arg parent_frame)"/>
+    <arg name="node_name" value="spawn_sandwich_A"/>
+  </include>
+  <include file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="0" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="spawn_objects_urdf.launch" />
+    <arg name="value" value="
+    xacro:=true
+    sandwich:=true
+    use_ar_marker:=true
+    marker_id:=50
+    marker_size:=$(arg marker_size)
+    use_label:=false
+    label_id:=B
+    model:=$(find fcsc_description)/model/sandwich2.urdf.xacro
+    name:=sandwich_B
+    x:=0.0
+    y:=0.15
+    z:=0.8
+    Y:=-0.378
+    frame:=$(arg parent_frame)"/>
+    <arg name="node_name" value="spawn_sandwich_B"/>
+  </include>
+  <include file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="0" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="spawn_objects_urdf.launch" />
+    <arg name="value" value="
+    xacro:=true
+    sandwich:=true
+    use_ar_marker:=true
+    marker_id:=60
+    marker_size:=$(arg marker_size)
+    use_label:=false
+    label_id:=C
+    model:=$(find fcsc_description)/model/sandwich2.urdf.xacro
+    name:=sandwich_C
+    x:=-0.128
+    y:=-0.137
+    z:=0.8
+    Y:=3.3
+    frame:=$(arg parent_frame)"/>
+    <arg name="node_name" value="spawn_sandwich_C"/>
+    <!-- Y:=0.13 -->
+  </include>
+  <include file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="0" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="spawn_objects_urdf.launch" />
+    <arg name="value" value="
+    xacro:=true
+    sandwich:=true
+    use_ar_marker:=true
+    marker_id:=70
+    marker_size:=$(arg marker_size)
+    use_label:=false
+    label_id:=D
+    model:=$(find fcsc_description)/model/sandwich2.urdf.xacro
+    name:=sandwich_D
+    x:=-0.107
+    y:=0.3
+    z:=0.8
+    R:=-1.57
+    frame:=$(arg parent_frame)"/>
+    <arg name="node_name" value="spawn_sandwich_D"/>
+    <!-- Y:=0.577 -->
+  </include>
+  <include file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="0" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="spawn_objects_urdf.launch" />
+    <arg name="value" value="
+    xacro:=true
+    sandwich:=true
+    use_ar_marker:=true
+    marker_id:=80
+    marker_size:=$(arg marker_size)
+    use_label:=false
+    label_id:=E
+    model:=$(find fcsc_description)/model/sandwich2.urdf.xacro
+    name:=sandwich_E
+    x:=0.0
+    y:=-0.3
+    z:=0.8
+    Y:=1.53
+    frame:=$(arg parent_frame)"/>
+    <arg name="node_name" value="spawn_sandwich_E"/>
+  </include>
+</launch>

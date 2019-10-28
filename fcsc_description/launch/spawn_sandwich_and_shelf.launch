@@ -1,0 +1,27 @@
+<!-- world -->
+<launch>
+  <include file="$(find fcsc_description)/launch/spawn_objects_urdf.launch">
+    <arg name="xacro" value="true"/>
+    <arg name="shelf" value="true"/>
+    <arg name="marker_id" value="90"/>
+    <arg name="marker_size" value="5"/>
+    <arg name="name" value="shelfB"/>
+    <arg name="model" value="$(find fcsc_description)/model/shelf-2018-2.urdf.xacro"/>
+    <arg name="x" value="0.0"/>
+    <arg name="y" value="1.2"/>
+    <arg name="z" value="0.02"/>
+    <arg name="Y" value="1.57"/>
+    <arg name="option" value=""/>
+  </include>
+
+  <include file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="2" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="spawn_sandwich.launch" />
+    <arg name="node_name" value="spawn_sandwiches"/>
+    <arg name="value" value="
+    parent_frame:=shelfB::shelf_base
+    marker_size:=3"/>
+  </include>
+
+</launch>

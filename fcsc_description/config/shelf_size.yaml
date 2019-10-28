@@ -1,0 +1,71 @@
+# FCSC2018 shelf
+shelf_size:
+  # stocking
+  shelfA:
+    width: 0.9
+    depth: 0.435
+    thickness: 0.02
+    # installation_heights: [0.268, 0.791, 1.318] # 2018/10/15 練習２回目 棚入れ替えなし
+    installation_heights: [0.24, 0.785, 1.31] # 2018/10/15 練習１回目 棚入れ替えあり
+    # installation_heights: [0.24, 0.797, 1.315] # Real(board offset) 2018/10/06
+    # installation_heights: [0.24, 0.74, 1.24] # Real(board offset)
+    # installation_heights: [0.41, 0.91, 1.41] # KDEL(F507) 0.41
+    # installation_heights: [0.15, 0.65, 1.15] # Ideal
+    stopper_height: 0.035
+    stopper_thickness: 0.01
+    height: 1.5
+  # faceup
+  shelfB:
+    width: 0.9
+    depth: 0.435
+    thickness: 0.02
+    installation_heights: [0.34, 0.64, 1.51] # 2018/10/16 練習１回目・２回目
+    # installation_heights: [0.34, 0.635, 1.51] # Real (board offset) 2018/10/08
+    # installation_heights: [0.34, 0.59] # Real (board offset) 2018/10/08
+    # installation_heights: [0.64, 0.74] # Real (board offset)
+    # installation_heights: [0.15, 0.41] # KDEL(F507)
+    # installation_heights: [0.45, 0.65]
+    stopper_height: 0.035
+    stopper_thickness: 0.01
+    height: 1.5
+
+# FCSC2017 shelf
+# shelf_size:
+#   width: 0.9
+#   depth: 0.435
+#   # depth: 0.4
+#   installation_height:
+#     lower: 0.58
+#     upper: 3
+#     # upper: 1.09
+#   stopper_height: 0.0
+#   # stopper_height: 0.035
+#   thickness: 0.01
+#   height: 1.5
+#   no_upper: true
+
+# # kdel shelf
+# shelf_size:
+#   width:  0.854
+#   depth:     0.447
+#   # depth:     0.377
+#   installation_height:
+#     lower: 0.59
+#     upper: 1.36
+#   stopper_height: 0.0
+#   thickness: 0.01
+#   height: 1.5
+#   no_upper: false
+
+## daihen shelf
+# shelf_size:
+#   width: 0.854
+#   depth: 0.45
+#   # depth:     0.377
+#   installation_height:
+#     lower: 0.7
+#     upper: 2
+#   stopper_height: 0.0
+#   thickness: 0.01
+#   height: 3
+#   no_upper: false

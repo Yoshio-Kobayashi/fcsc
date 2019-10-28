@@ -1,0 +1,4 @@
+<launch>
+  <node name="publish_camera_info" pkg="fcsc_description" type="publish_camera_info.py" args="$(find fcsc_description)/config/realsense_rgb_calibration.yaml"/>
+  <!-- $(find fcsc_descriptin)/config/realsense_rgb_calibration.yaml -->
+</launch>

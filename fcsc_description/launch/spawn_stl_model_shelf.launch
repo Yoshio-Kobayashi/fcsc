@@ -1,0 +1,28 @@
+<!-- world -->
+<launch>
+  <arg name="marker_size" default="10"/>
+  <!-- <arg name="marker_id" default="40"/> -->
+  <arg name="x" default="0.75"/>
+
+  <include file="$(find fcsc_description)/launch/spawn_objects_urdf.launch">
+    <arg name="xacro" value="true"/>
+    <arg name="shelf" value="true"/>
+    <arg name="marker_id" value="40"/>
+    <arg name="marker_size" value="$(arg marker_size)"/>
+    <arg name="name" value="shelfA"/>
+    <arg name="model" value="$(find fcsc_description)/model/stl_model_shelf.urdf.xacro"/>
+    <arg name="x" value="$(arg x)"/>
+    <arg name="option" value="marker_id:=40 marker_size:=$(arg marker_size)"/>
+  </include>
+  <include file="$(find fcsc_description)/launch/spawn_objects_urdf.launch">
+    <arg name="xacro" value="true"/>
+    <arg name="shelf" value="true"/>
+    <arg name="marker_id" value="50"/>
+    <arg name="marker_size" value="$(arg marker_size)"/>
+    <arg name="name" value="shelfB"/>
+    <arg name="model" value="$(find fcsc_description)/model/stl_model_shelf.urdf.xacro"/>
+    <arg name="x" value="$(arg x)"/>
+    <arg name="y" value="1.0"/>
+    <arg name="option" value="marker_id:=50 marker_size:=$(arg marker_size)"/>
+  </include>
+</launch>

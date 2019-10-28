@@ -1,0 +1,36 @@
+<!-- world -->
+<launch>
+
+	<arg name="x" default="0"/>
+	<arg name="y" default="0"/>
+	<arg name="z" default="0"/>
+	<arg name="Y" default="0"/>
+	<arg name="R" default="0"/>
+	<arg name="P" default="0"/>
+	<arg name="name" default="object"/>
+	<arg name="frame" default="world"/>
+	<arg name="xacro" default="false"/>
+	<arg name="use_ar_marker" default="false"/>
+	<arg name="use_label" default="false"/>
+	<arg name="shelf" default="false"/>
+	<arg name="marker_id" default="0" />
+	<arg name="marker_size" default="3" />
+	<arg name="label_id" default="A" />
+	<arg name="model" default="$(find fcsc_description)/model/shelf.urdf"/>
+	<arg name="sandwich" default="false"/>
+	<arg name="option" default=""/>
+
+	<param if="$(arg xacro)" name="$(arg name)_description" command="$(find xacro)/xacro.py $(arg model) $(arg option)"/>
+  <param if="$(arg use_ar_marker)" name="$(arg name)_description" command="$(find xacro)/xacro.py $(arg model) marker_id:=$(arg marker_id)"/>
+  <param if="$(arg use_label)" name="$(arg name)_description" command="$(find xacro)/xacro.py $(arg model) label_id:=$(arg label_id)"/>
+	<param if="$(arg sandwich)" name="$(arg name)_description" command="$(find xacro)/xacro.py $(arg model) use_lable:=$(arg use_label) label_id:=$(arg label_id) use_ar_marker:=$(arg use_ar_marker) marker_id:=$(arg marker_id) marker_size:=$(arg marker_size)"/>
+	<param if="$(arg shelf)" name="$(arg name)_description" command="$(find xacro)/xacro.py $(arg model) $(arg option)"/>
+	<!-- <param if="$(arg use_shelf)" name="$(arg name)_description" command="$(find xacro)/xacro.py $(arg model) marker_size:=$(arg marker_size) marker_id:=$(arg marker_id)"/> -->
+	<param unless="$(arg xacro)" name="$(arg name)_description" textfile="$(arg model)" />
+
+
+	<!-- spawn objects -->
+	<node name="spawn_$(arg name)" pkg="gazebo_ros" type="spawn_model" args="-param $(arg name)_description -urdf -x $(arg x) -y $(arg y) -z $(arg z) -Y $(arg Y) -R $(arg R) -P $(arg P) -model $(arg name) -reference_frame $(arg frame)" respawn="false" output="screen"/>
+
+	<!-- (ex) -reference_frame other_model_name::link_name -->
+</launch>

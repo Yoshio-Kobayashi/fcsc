@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="maue" default="false"/>
+  <arg name="mayoko" default="false"/>
+  <arg name="naname" default="false"/>
+
+  <param if="$(arg maue)" name="robot_description" command="$(find xacro)/xacro --inorder '$(find fcsc_description)/model/daihen_ur5.urdf.xacro' maue_ur5:=true"/>
+
+  <param if="$(arg mayoko)" name="robot_description" command="$(find xacro)/xacro --inorder '$(find fcsc_description)/model/daihen_ur5.urdf.xacro' mayoko_ur5:=true"/>
+
+  <param if="$(arg naname)" name="robot_description" command="$(find xacro)/xacro --inorder '$(find fcsc_description)/model/daihen_ur5.urdf.xacro' naname_ur5:=true"/>
+
+
+</launch>

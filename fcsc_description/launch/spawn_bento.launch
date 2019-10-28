@@ -1,0 +1,77 @@
+<launch>
+  <!-- FCSC 2018 -->
+  <include file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="0" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="spawn_objects_urdf.launch" />
+    <arg name="value" value="
+    xacro:=true
+    use_ar_marker:=true
+    marker_id:=1
+    model:=$(find fcsc_description)/model/bento.urdf.xacro
+    name:=bento_1
+    x:=0
+    y:=0
+    z:=0.04
+    Y:=1.5707
+    frame:=daihen_ur5::container"/>
+    <arg name="node_name" value="spawn_bento_1"/>
+  </include>
+
+  <include file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="time" value="1" />
+    <arg name="file" value="spawn_objects_urdf.launch" />
+    <arg name="value" value="
+    xacro:=true
+    use_ar_marker:=true
+    marker_id:=2
+    model:=$(find fcsc_description)/model/bento.urdf.xacro
+    name:=bento_2
+    x:=0
+    y:=0
+    z:=0.1
+    Y:=1.5707
+    frame:=daihen_ur5::container"/>
+    <arg name="node_name" value="spawn_bento_2"/>
+  </include>
+
+  <include file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="2" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="spawn_objects_urdf.launch" />
+    <arg name="value" value="
+    xacro:=true
+    use_ar_marker:=true
+    marker_id:=3
+    model:=$(find fcsc_description)/model/bento.urdf.xacro
+    name:=bento_3
+    x:=0.0
+    y:=0.0
+    z:=0.16
+    Y:=1.5707
+    frame:=daihen_ur5::container"/>
+    <arg name="node_name" value="spawn_bento_3"/>
+  </include>
+
+  <include file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="2" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="spawn_objects_urdf.launch" />
+    <arg name="value" value="
+    xacro:=true
+    use_ar_marker:=true
+    marker_id:=4
+    model:=$(find fcsc_description)/model/bento.urdf.xacro
+    name:=bento_4
+    x:=0.0
+    y:=0.0
+    z:=0.22
+    Y:=1.5707
+    frame:=daihen_ur5::container"/>
+    <arg name="node_name" value="spawn_bento_4"/>
+  </include>
+
+  <!-- ************************************************ -->
+
+</launch>

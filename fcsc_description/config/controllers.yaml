@@ -1,0 +1,34 @@
+controller_manager_ns: controller_manager
+controller_list:
+ - name: fcsc_mobile_manipulator/arm_joint_controller
+   action_ns: follow_joint_trajectory
+   type: FollowJointTrajectory
+   default: true
+   joints:
+    - slider_joint
+    - joint1
+    - joint2
+    - joint3
+    - joint4
+    - joint5
+    - joint6
+ - name: fcsc_mobile_manipulator/arm_with_slider_joint_controller
+   action_ns: follow_joint_trajectory
+   type: FollowJointTrajectory
+   default: true
+   joints:
+    - slider_joint
+    - joint1
+    - joint2
+    - joint3
+    - joint4
+    - joint5
+    - joint6
+ - name: fcsc_mobile_manipulator/gripper_controller
+   action_ns: gripper_cmd
+   type: GripperCommand
+   default: true
+   joints:
+    - gripper_joint
+
+

@@ -1,0 +1,3 @@
+<launch>
+  <node name="set_home_pose" pkg ="fcsc_description" type="set_daihen_ur5_home_pose"/>
+</launch>

@@ -1,0 +1,54 @@
+<!-- gazebo_navigation_map -->
+
+<launch>
+
+  <arg name="paused" default="false"/>
+  <arg name="debug" default="false"/>
+  <arg name="gui" default="true"/>
+  <arg name="use_pos" default="false"/>
+
+  <include file="$(find gazebo_ros)/launch/empty_world.launch"/>
+
+  <param name="robot_description" command="$(find xacro)/xacro.py '$(find fcsc_description)/model/dulcinea_ur5.urdf.xacro'" />
+
+  <!-- <node name="spawn_gazebo_model" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -x -0.6 -y 0 -z 0 -R 0 -P 0 -Y -1.57 -->
+    <node name="spawn_gazebo_model" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -model dulcinea_ur5" />
+
+  <!-- Starting Joint state publisher node which will publish the joint values -->
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">
+    <param name="/use_gui" value="false"/>
+    <rosparam param="/source_list">[/dulcinea_ur5/joint_states]</rosparam>
+  </node>
+
+  <!-- publish all the frames to TF -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="state_publisher">
+    <param name="publish_frequency" type="double" value="50.0" />
+    <param name="tf_prefix" type="string" value="" />
+  </node>
+
+  <!-- Fake Calibration -->
+  <node pkg="rostopic" type="rostopic" name="fake_joint_calibration"
+        args="pub /calibrated std_msgs/Bool true" />
+
+  <!-- trajctory controller -->
+  <rosparam file="$(find fcsc_description)/config/dulcinea_ur5_controller.yaml" command="load"/>
+  <node name="dulcinea_ur5_controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen" ns="/dulcinea_ur5" args="arm_controller joint_state_controller"/><!-- gripper_controller -->
+
+  <!-- spawn container -->
+  <!--include file="$(find timed_roslaunch)/launch/timed_roslaunch.launch">
+    <arg name="time" value="3" />
+    <arg name="pkg" value="fcsc_description" />
+    <arg name="file" value="spawn_objects_urdf.launch" />
+    <arg name="value" value="
+    use_xacro:=true
+    model:=$(find fcsc_description)/model/container.urdf.xacro
+    name:=container
+    x:=0
+    y:=-0.5
+    z:=0.01
+    Y:=0
+    frame:=dulcinea_ur5::ur5_base_link
+    " />
+    <arg name="node_name" value="spawn_container"/>
+  </include-->
+</launch>
